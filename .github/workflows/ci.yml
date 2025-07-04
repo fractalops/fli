@@ -8,7 +8,6 @@ on:
 
 env:
   GO_VERSION: '1.24.4'
-  CGO_ENABLED: 0
 
 jobs:
   test:
@@ -32,7 +31,7 @@ jobs:
       run: go mod download
 
     - name: Run tests
-      run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+      run: CGO_ENABLED=1 go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
