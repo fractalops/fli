@@ -1,4 +1,4 @@
-module fli
+module github.com/fractalops/fli
 
 go 1.22
 
