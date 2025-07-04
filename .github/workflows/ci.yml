@@ -92,7 +92,7 @@ jobs:
         output: 'trivy-results.sarif'
 
     - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
       if: always()
       with:
         sarif_file: 'trivy-results.sarif'
@@ -101,25 +101,6 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     needs: [test, lint]
-
-    strategy:
-      matrix:
-        include:
-          - os: linux
-            arch: amd64
-            target: linux-amd64
-          - os: linux
-            arch: arm64
-            target: linux-arm64
-          - os: darwin
-            arch: amd64
-            target: darwin-amd64
-          - os: darwin
-            arch: arm64
-            target: darwin-arm64
-          - os: windows
-            arch: amd64
-            target: windows-amd64.exe
 
     steps:
     - name: Checkout code
@@ -131,22 +112,5 @@ jobs:
         go-version: ${{ env.GO_VERSION }}
         cache: true
 
-    - name: Get version info
-      id: version
-      run: |
-        VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-        BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "build_time=$BUILD_TIME" >> $GITHUB_OUTPUT
-
-    - name: Build binary
-      run: |
-        GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build \
-          -ldflags="-s -w -X main.version=${{ steps.version.outputs.version }} -X main.buildTime=${{ steps.version.outputs.build_time }}" \
-          -o fli-${{ matrix.target }} -v ./...
-
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: fli-${{ matrix.target }}
-        path: fli-${{ matrix.target }} 
+    - name: Build 
+      run: go build ./...
