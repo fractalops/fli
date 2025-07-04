@@ -29,11 +29,6 @@ make build
 sudo make install
 ```
 
-**Using Go**
-```bash
-go install github.com/fractalops/fli/cmd/fli@latest
-```
-
 ### Configuration
 
 1. **Set up AWS credentials**:
