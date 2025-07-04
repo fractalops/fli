@@ -31,7 +31,7 @@ sudo mv fli /usr/local/bin/
 
 **From Source**
 ```bash
-git clone https://github.com/yourusername/fli.git
+git clone https://github.com/fractalops/fli.git
 cd fli
 make build
 sudo make install
@@ -39,7 +39,7 @@ sudo make install
 
 **Using Go**
 ```bash
-go install github.com/yourusername/fli/cmd/fli@latest
+go install github.com/fractalops/fli/cmd/fli@latest
 ```
 
 ### Configuration
