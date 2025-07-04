@@ -11,23 +11,15 @@ FLI is a command-line tool for querying and analyzing AWS VPC Flow Logs stored i
 
 ## Features
 
-- **Query Builder**: Type-safe query construction with support for VPC Flow Log versions 2 and 5
-- **Multiple Output Formats**: Table, CSV, and JSON output
-- **High Performance**: Efficient caching system and optimized query execution
-- **Cross-Platform**: Native builds for Linux, macOS, and Windows (AMD64/ARM64)
-- **Production Ready**: Comprehensive testing (87.5% coverage) and CI/CD pipeline
-- **IP Annotation**: Automatic annotation of IP addresses with WHOIS and cloud provider information
+- **Query AWS VPC Flow Logs** with natural language filters
+- **Aggregate data** with count, sum, and group-by operations
+- **Multiple output formats**: Table, CSV, and JSON
+- **IP and ENI annotations**: WHOIS lookup, cloud provider IP detection, ENI tagging
+- **Cross-platform**: Linux, macOS, and Windows binaries
 
 ## Quick Start
 
 ### Installation
-
-**From Binary (Recommended)**
-```bash
-curl -L https://github.com/fractalops/fli/releases/latest/download/fli-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/') -o fli
-chmod +x fli
-sudo mv fli /usr/local/bin/
-```
 
 **From Source**
 ```bash
