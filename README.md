@@ -1,11 +1,11 @@
 # FLI - Flow Logs Insights
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/yourusername/fli)](https://goreportcard.com/report/github.com/yourusername/fli)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/yourusername/fli)](https://go.dev/)
-[![Test Coverage](https://img.shields.io/badge/coverage-87.5%25-brightgreen)](https://github.com/yourusername/fli)
+[![Go Report Card](https://goreportcard.com/badge/github.com/fractalops/fli)](https://goreportcard.com/report/github.com/fractalops/fli)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/fractalops/fli)](https://go.dev/)
+[![Test Coverage](https://img.shields.io/badge/coverage-87.5%25-brightgreen)](https://github.com/fractalops/fli)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/yourusername/fli)](https://github.com/yourusername/fli/releases)
-[![Contributors](https://img.shields.io/github/contributors/yourusername/fli)](https://github.com/yourusername/fli/graphs/contributors)
+[![Release](https://img.shields.io/github/v/release/fractalops/fli)](https://github.com/fractalops/fli/releases)
+[![Contributors](https://img.shields.io/github/contributors/fractalops/fli)](https://github.com/fractalops/fli/graphs/contributors)
 
 FLI is a command-line tool for querying and analyzing AWS VPC Flow Logs stored in CloudWatch Logs built in Go
 
@@ -24,7 +24,7 @@ FLI is a command-line tool for querying and analyzing AWS VPC Flow Logs stored i
 
 **From Binary (Recommended)**
 ```bash
-curl -L https://github.com/yourusername/fli/releases/latest/download/fli-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/') -o fli
+curl -L https://github.com/fractalops/fli/releases/latest/download/fli-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/') -o fli
 chmod +x fli
 sudo mv fli /usr/local/bin/
 ```
