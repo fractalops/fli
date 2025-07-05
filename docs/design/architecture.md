@@ -1,10 +1,10 @@
-# FLI System Architecture
+# FLI Architecture
 
-This document provides a comprehensive overview of FLI's system architecture, covering all major components and their interactions.
+This document provides an architectural overview of FLI's design, focusing on system components, interfaces, and data flow.
 
-## Overview
+## System Overview
 
-FLI follows a modular architecture with clear separation of concerns:
+FLI (Flow Log Insights) is a command-line tool designed to analyze AWS VPC Flow Logs using CloudWatch Logs Insights. It provides an intuitive interface for querying, analyzing, and visualizing network traffic data.
 
 ```mermaid
 graph TD
@@ -12,65 +12,50 @@ graph TD
     A --> C[Query Runner]
     A --> D[Formatter]
     A --> E[Cache System]
-    B --> F[Filter Parser]
+    A --> J[YAML Config]
     C --> G[AWS CloudWatch]
-    D --> H[Output Formats]
-    E --> I[Annotation Storage]
-    F --> B
-    G --> C
-    H --> D
-    I --> E
+    E --> H[AWS EC2]
+    B --> C
+    D --> A
 ```
 
-## 1. CLI Architecture
+## Core Components
 
-### Component Structure
+### 1. Command Line Interface
 
-The CLI system provides:
-- Command parsing and execution using Cobra
-- Flag handling and validation
-- Query execution and result formatting
-- Cache and annotation integration
-- Result enrichment with contextual information
+The CLI layer provides a user-friendly interface for interacting with VPC Flow Logs data:
 
-### Command Hierarchy
+- **Command Structure**: Hierarchical command structure using verbs (raw, count, sum, avg, min, max)
+- **Flag System**: Consistent flag handling across commands
+- **Configuration**: Support for environment variables and YAML configurations
 
-```
-fli/
-├── raw     # Raw flow log entries
-├── count   # Count aggregations
-├── sum     # Sum numeric fields
-├── avg     # Average calculations
-├── min     # Minimum values
-├── max     # Maximum values
-└── cache/
-    ├── refresh  # Update ENI annotations
-    ├── prefixes # Fetch cloud provider IP ranges
-    ├── list     # Show cache contents
-    └── clean    # Clear cache
-```
+#### Key Interfaces
 
-### Implementation Details
-
-#### Command Structure
 ```go
+// Command execution pattern
+func runVerb(verb querybuilder.Verb) func(cmd *cobra.Command, args []string) error
+
+// Query execution
+func executeQuery(ctx context.Context, cmd *cobra.Command, opts []querybuilder.Option, flags *CommandFlags) ([][]interface{}, runner.QueryStatistics, error)
+```
+
+#### Key Data Structures
+
+```go
+// CommandFlags holds all the flags for the CLI commands
 type CommandFlags struct {
     // Common flags
     DryRun     bool
     Debug      bool
     UseColor   bool
-    NoPtr      bool
-    ProtoNames bool
-
+    
     // Query-specific flags
     Limit    int
     Format   string
     Since    time.Duration
     Filter   string
     By       string
-    SaveENIs bool
-    SaveIPs  bool
-
+    
     // AWS-specific flags
     LogGroup     string
     Version      int
@@ -78,46 +63,26 @@ type CommandFlags struct {
 }
 ```
 
-#### Query Execution Flow
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant C as CLI
-    participant B as QueryBuilder
-    participant R as Runner
-    participant A as Formatter
-    participant F as Output
-    
-    U->>C: fli raw --save-enis --save-ips
-    C->>B: Build Query
-    B-->>C: Return Query String
-    C->>R: Execute Query
-    R-->>C: Return Results
-    C->>A: Enrich with Annotations
-    A-->>C: Return Enriched Results
-    C->>F: Format Results
-    F-->>U: Display
-```
+#### Configuration Options
 
-#### Default Values
-- **Log Group**: Empty (required flag, can be set via FLI_LOG_GROUP env var)
-- **Version**: 2 (VPC Flow Logs format)
-- **Limit**: 20 results
-- **Format**: table
-- **Since**: 5 minutes
-- **Query Timeout**: 5 minutes
-- **Cache Path**: `~/.fli/cache/anno.db`
+- **Log Group**: Target CloudWatch Logs group (required)
+- **Time Window**: Period to analyze (--since flag, defaults to 5m)
+- **Output Format**: Table, CSV, or JSON (--format flag)
+- **Filter Expression**: SQL-like filter syntax (--filter flag)
+- **Group By**: Fields to group results by (--by flag)
 
-## 2. Query Builder
+### 2. Query Building System
 
-### Overview
+The query builder transforms user-friendly CLI commands into CloudWatch Logs Insights queries:
 
-The query builder provides type-safe construction of CloudWatch Logs Insights queries with support for VPC Flow Log versions 2 and 5.
+- **Schema-Aware**: Validates fields against VPC Flow Logs schema
+- **Filter Support**: Parses and validates filter expressions
+- **Aggregation**: Supports various aggregation operations
 
-### Core Components
+#### Key Interfaces
 
-#### Schema System
 ```go
+// Schema interface defines how field validation works
 type Schema interface {
     GetParsePattern(version int) (string, error)
     ValidateField(field string, version int) error
@@ -127,165 +92,93 @@ type Schema interface {
     GetComputedFieldExpression(field string, version int) string
 }
 
-type VPCFlowLogsSchema struct {
-    // Implements Schema interface for VPC Flow Logs
-}
+// Builder creates CloudWatch Logs Insights queries
+func New(schema Schema, opts ...Option) (*Builder, error)
+func (b *Builder) String() string
 ```
 
-#### Builder Pattern
-```go
-type Builder struct {
-    verb    Verb
-    fields  []string
-    groupBy []string
-    limit   int
-    filters []Expr
-    version int
-    schema  Schema
-}
-```
-
-### Query Construction Process
-
-1. **Parse Clause Generation**
-   ```insights
-   parse @message "* * * * * * * * * * * * * *" as version, account_id, interface_id, srcaddr, dstaddr, srcport, dstport, protocol, packets, bytes, start, end, action, log_status
-   ```
-
-2. **Filter Integration**
-   - User filters are parsed and validated using schema-aware parser
-   - Filters are combined with AND logic
-   - Inserted after parse clause
-
-3. **Stats Generation**
-   - Based on verb (count, sum, avg, min, max)
-   - Includes grouping if specified
-   - Adds sorting and limits
-
-### Verb-to-Insights Mapping
-
-| Verb | Pattern | Generated Query |
-|------|---------|-----------------|
-| count | `count flows` | `stats count(*) as flows` |
-| count | `count <field>` | `stats count(*) as flows by <field> \| sort flows desc` |
-| sum/avg/min/max | `verb <field>` | `stats verb(field) as verb_field` |
-| sum/avg/min/max | `verb <field> --by x` | `stats verb(field) as verb_field by x \| sort verb_field desc` |
-
-### Computed Fields
-
-The schema supports computed fields that are generated as CloudWatch Logs Insights expressions:
-- **Protocol Names**: Convert protocol numbers to names (TCP, UDP, etc.)
-- **Time Calculations**: Duration calculations between start and end times
-- **Custom Expressions**: Complex field calculations
-
-## 3. Filter System
-
-### Filter Grammar
-
-Filters use a domain-specific language (DSL) for expressing conditions:
-
-```ebnf
-filter-expr    = condition { "and" | "or" condition } ;
-condition      = field operator value ;
-field          = identifier ;
-operator       = "=" | "!=" | ">" | "<" | ">=" | "<=" | "like" | "between" ;
-value          = string | number | boolean | "null" ;
-```
-
-### Supported Operators
-
-| Operator | Description | Example |
-|----------|-------------|---------|
-| `=` | Equality | `srcaddr=10.0.0.1` |
-| `!=` | Inequality | `action!=REJECT` |
-| `>` | Greater than | `bytes>1000` |
-| `<` | Less than | `packets<10` |
-| `>=` | Greater than or equal | `dstport>=80` |
-| `<=` | Less than or equal | `srcport<=1024` |
-| `like` | Pattern matching | `srcaddr like "10"` |
-| `between` | Range | `dstport between 80 and 443` |
-
-### Filter Parsing
-
-1. **Lexical Analysis**: Tokenize filter expression
-2. **Syntax Analysis**: Parse into abstract syntax tree
-3. **Semantic Analysis**: Validate field names and types against schema
-4. **Code Generation**: Generate CloudWatch Logs Insights filter
-
-### Advanced Features
-
-- **CIDR Support**: `srcaddr=10.0.0.0/24`
-- **Port Ranges**: `dstport between 80 and 443`
-- **Protocol Names**: `protocol=TCP` (converted to numbers)
-- **Complex Logic**: `srcaddr=10.0.0.1 and dstport=443 or action=REJECT`
-- **Schema Validation**: Field existence and type checking
-
-## 4. Query Execution (Runner)
-
-### Overview
-
-The runner handles query execution against AWS CloudWatch Logs Insights with proper error handling and result processing.
-
-### Execution Flow
+#### Key Data Structures
 
 ```go
-func (r *Runner) Run(ctx context.Context, query, logGroup string, start, end int64) ([][]Field, error) {
-    // 1. Start query
-    startResp, err := r.Client.StartQuery(ctx, &cloudwatchlogs.StartQueryInput{
-        LogGroupIdentifiers: []string{logGroup},
-        QueryString:         &query,
-        StartTime:           &start,
-        EndTime:             &end,
-    })
-    
-    // 2. Poll for completion with exponential backoff
-    results, err := r.pollResults(ctx, startResp.QueryId)
-    
-    // 3. Process results
-    return r.processResults(results), nil
+// AggregationField represents a field with its aggregation verb
+type AggregationField struct {
+    Field string
+    Verb  Verb
 }
+
+// Option configures a Builder
+type Option func(*Builder) error
 ```
 
-### Query Lifecycle
+### 3. Query Execution System
 
-1. **Query Start**
-   - Submit query to CloudWatch Logs Insights
-   - Receive query ID
+The runner executes queries against AWS CloudWatch Logs Insights:
 
-2. **Status Polling**
-   - Poll query status every 500ms initially
-   - backoff up to 10 seconds
-   - Handle timeout and cancellation via context
+- **Asynchronous Execution**: Handles long-running queries
+- **Status Polling**: Polls for query completion with backoff
+- **Result Processing**: Transforms raw results into structured data
 
-3. **Result Processing**
-   - Parse raw results into structured format
-   - Handle field mapping and type conversion
-   - Apply result limits and sorting
-
-### Error Handling
-
-- **Query Failures**: Proper error propagation with enhanced error messages
-- **Timeout Handling**: Context cancellation support
-- **Rate Limiting**: Respect AWS API limits
-- **Invalid Results**: Graceful degradation
-- **AWS Credential Issues**: Detailed error messages for common credential problems
-
-### Field Structure
+#### Key Interfaces
 
 ```go
+// CloudWatchLogsClient interface for AWS interactions
+type CloudWatchLogsClient interface {
+    StartQuery(ctx context.Context, params *cloudwatchlogs.StartQueryInput, optFns ...func(*cloudwatchlogs.Options)) (*cloudwatchlogs.StartQueryOutput, error)
+    GetQueryResults(ctx context.Context, params *cloudwatchlogs.GetQueryResultsInput, optFns ...func(*cloudwatchlogs.Options)) (*cloudwatchlogs.GetQueryResultsOutput, error)
+}
+
+// Runner executes queries
+func (r *Runner) Run(ctx context.Context, logGroup string, query string, start, end int64) (QueryResult, error)
+```
+
+#### Key Data Structures
+
+```go
+// Field represents a single field in a query result
 type Field struct {
-    Name  string // Field name
-    Value string // Field value as string
+    Name  string
+    Value string
+}
+
+// QueryResult contains the results and statistics of a query execution
+type QueryResult struct {
+    Results    [][]Field
+    Statistics QueryStatistics
+}
+
+// QueryStatistics represents statistics about a query execution
+type QueryStatistics struct {
+    BytesScanned   int64
+    RecordsScanned int64
+    RecordsMatched int64
 }
 ```
 
-## 5. Output Formatting
+### 4. Formatting System
 
-### Formatter Architecture
+The formatter transforms query results into user-friendly output:
 
-The formatter system provides multiple output formats with consistent result processing:
+- **Multiple Formats**: Supports table, CSV, and JSON output
+- **Enrichment**: Adds context to results (ENI names, IP information)
+- **Colorization**: Enhances readability with color-coded output
+
+#### Key Interfaces
 
 ```go
+// Format results according to options
+func Format(results [][]runner.Field, headers []string, options FormatOptions) (string, error)
+
+// Format results with statistics
+func FormatWithStats(results [][]runner.Field, headers []string, options FormatOptions, stats runner.QueryStatistics) (string, error)
+
+// Enrich results with annotations
+func EnrichResultsWithAnnotations(results [][]runner.Field, cachePath string) ([][]runner.Field, error)
+```
+
+#### Key Data Structures
+
+```go
+// FormatOptions configures the formatter
 type FormatOptions struct {
     Format        string
     Colorize      bool
@@ -293,81 +186,31 @@ type FormatOptions struct {
     UseProtoNames bool
     Debug         bool
 }
-
-// Format formats the results according to the specified options
-func Format(results [][]runner.Field, headers []string, options FormatOptions) (string, error) {
-    // Select formatter based on options.Format
-    // Apply formatting and return result
-}
 ```
 
-### Supported Formats
+### 5. Caching System
 
-#### Table Format
-```
-| srcaddr (api-server) | dstaddr (CLOUDFLARE) | action |
-|---------------------|---------------------|--------|
-| 10.0.1.10          | 1.1.1.1            | ACCEPT |
-```
+The cache provides persistent storage for annotations and metadata:
 
-#### CSV Format
-```csv
-srcaddr,dstaddr,action
-"10.0.1.10 (api-server)","1.1.1.1 (CLOUDFLARE)",ACCEPT
-```
+- **ENI Metadata**: Maps interface IDs to human-readable names
+- **IP Information**: Stores WHOIS and cloud provider information
+- **Persistence**: Maintains data between runs using BBolt database
 
-#### JSON Format
-```json
-[
-  {
-    "srcaddr": "10.0.1.10 (api-server)",
-    "dstaddr": "1.1.1.1 (CLOUDFLARE)",
-    "action": "ACCEPT"
-  }
-]
-```
-
-### Result Enrichment Pipeline
-
-1. **Protocol Resolution**: Convert protocol numbers to names
-2. **Annotation Enrichment**: Add ENI and IP annotations
-
-### Colorization
-
-- **ACCEPT Actions**: Green color
-- **REJECT Actions**: Red color
-
-### Protocol Mapping
-
-The formatter automatically converts protocol numbers to their corresponding names:
-
-- 1: ICMP
-- 6: TCP
-- 17: UDP
-- 41: IPv6
-- 47: GRE
-- 50: ESP
-- 51: AH
-- 58: ICMPv6
-- 89: OSPF
-- 103: PIM
-- 112: VRRP
-
-## 6. Caching System
-
-### Overview
-
-The caching system provides persistent storage for annotations and metadata to enhance query results with meaningful context using BBolt database.
-
-### Cache Architecture
+#### Key Interfaces
 
 ```go
-type Cache struct {
-    db     *bbolt.DB
-    logger Logger
-    config *Config
-}
+// Cache operations
+func Open(path string) (*Cache, error)
+func (c *Cache) Close() error
+func (c *Cache) RefreshENIs(ctx context.Context, ec2Client EC2Client, eniIDs []string) error
+func (c *Cache) RefreshAllENIs(ctx context.Context, ec2Client EC2Client) error
+func (c *Cache) EnrichIPs() error
+```
 
+#### Key Data Structures
+
+```go
+// ENITag stores information about an ENI
 type ENITag struct {
     ENI        string
     Label      string
@@ -376,60 +219,210 @@ type ENITag struct {
     FirstSeen  int64
 }
 
+// IPTag stores information about an IP address
 type IPTag struct {
-    Addr string
-    Name string
+    Addr      string
+    Name      string
+    Provider  string
+    Service   string
+    Region    string
+    FirstSeen int64
 }
 ```
 
-### Cache Operations
+### 6. Configuration System
 
-#### ENI Caching
-- **Storage**: Security group names and metadata
-- **Lookup**: Interface ID to human-readable name
-- **Refresh**: AWS API integration for current data
+The configuration system supports YAML-based query definitions:
 
-#### IP Caching
-- **Storage**: WHOIS data and cloud provider information
-- **Lookup**: IP address to service/region information
-- **Sources**: WHOIS databases, cloud provider public prefixes
-- **Enrichment**: Automatic IP annotation during query execution
+- **Single Queries**: Define individual queries with parameters
+- **Query Collections**: Group related queries together
+- **Metadata**: Add names, descriptions, and tags to queries
 
-
-### Cache Commands
-
-- **refresh**: Update ENI tags using AWS API (with --eni or --all flags)
-- **prefixes**: Fetch and update cloud provider IP ranges
-- **list**: Display cache contents
-- **clean**: Remove cache database
-
-### Cache Path
-
-The default cache path is `~/.fli/cache/anno.db`, which can be overridden with the `--cache` flag for cache-related commands.
-
-## 7. AWS Integration
-
-### CloudWatch Logs Insights
-
-#### Query Execution
-```go
-type CloudWatchLogsClient interface {
-    StartQuery(ctx context.Context, params *cloudwatchlogs.StartQueryInput) (*cloudwatchlogs.StartQueryOutput, error)
-    GetQueryResults(ctx context.Context, params *cloudwatchlogs.GetQueryResultsInput) (*cloudwatchlogs.GetQueryResultsOutput, error)
-}
-```
-
-### EC2 Integration
-
-The cache system integrates with EC2 API to fetch ENI metadata:
+#### Key Interfaces
 
 ```go
-type EC2Client interface {
-    DescribeNetworkInterfaces(ctx context.Context, eniIDs []string) ([]aws.ENIDetails, error)
+// Execute a query configuration
+func executeQueryConfig(cmd *cobra.Command, config QueryConfig) error
+
+// Execute a query collection
+func executeQueryCollection(cmd *cobra.Command, collection QueryCollection) error
+```
+
+#### Key Data Structures
+
+```go
+// QueryConfig represents a single query configuration
+type QueryConfig struct {
+    Verb         string
+    Fields       []string
+    LogGroup     string
+    Since        time.Duration
+    Filter       string
+    By           string
+    Limit        int
+    Version      int
+    Format       string
+    Name         string
+    Description  string
+    Tags         []string
+}
+
+// QueryCollection represents a collection of queries
+type QueryCollection struct {
+    Queries []EnhancedQueryConfig
 }
 ```
 
-### Environment Variables
+## Error Handling Strategy
 
-The CLI supports the following environment variables:
-- `FLI_LOG_GROUP`: Default log group to query
+FLI implements a comprehensive error handling strategy:
+
+1. **User-Facing Errors**: Clear, actionable error messages for common issues
+   ```
+   Error: log group is required
+   Error: invalid filter expression: field 'invalid_field' not found in schema
+   ```
+
+2. **AWS API Errors**: Translated to meaningful messages
+   ```
+   Error: failed to start query: log group '/aws/vpc/flow-logs' not found
+   Error: query execution failed: insufficient permissions
+   ```
+
+3. **Graceful Degradation**: Non-critical failures don't stop execution
+   ```
+   Warning: Failed to enrich results with annotations: cache not found
+   ```
+
+4. **Context Cancellation**: Proper handling of timeouts and interrupts
+   ```
+   Error: query cancelled by context: context deadline exceeded
+   ```
+
+## Component Interactions
+
+### Query Execution Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI
+    participant Builder
+    participant Runner
+    participant AWS
+    participant Formatter
+    
+    User->>CLI: fli count --by srcaddr
+    CLI->>Builder: Build query
+    Builder-->>CLI: Return query string
+    CLI->>Runner: Execute query
+    Runner->>AWS: Start query
+    AWS-->>Runner: Return query ID
+    loop Until complete
+        Runner->>AWS: Poll for results
+        AWS-->>Runner: Return status
+    end
+    AWS-->>Runner: Return results
+    Runner-->>CLI: Return structured results
+    CLI->>Formatter: Format results
+    Formatter-->>User: Display formatted results
+```
+
+### Cache Refresh Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI
+    participant Cache
+    participant AWS
+    
+    User->>CLI: fli cache refresh --all
+    CLI->>Cache: Get all ENI IDs
+    Cache-->>CLI: Return ENI IDs
+    CLI->>AWS: Describe network interfaces
+    AWS-->>CLI: Return ENI details
+    CLI->>Cache: Update ENI metadata
+    Cache-->>User: Confirmation message
+```
+
+## Configuration Examples
+
+### Single Query Configuration
+
+```yaml
+verb: count
+fields: [srcaddr, dstaddr]
+log_group: /aws/vpc/flow-logs
+since: 1h
+filter: "bytes > 1000"
+by: dstport
+limit: 20
+version: 2
+format: table
+name: "Large Transfers"
+description: "Identify large data transfers"
+tags: [security, monitoring]
+```
+
+### Query Collection
+
+```yaml
+queries:
+  - name: "HTTPS Traffic"
+    description: "Monitor HTTPS traffic"
+    tags: [security, web]
+    config:
+      verb: count
+      log_group: /aws/vpc/flow-logs
+      since: 1h
+      filter: "dstport = 443"
+      by: srcaddr
+      limit: 10
+  
+  - name: "Rejected Traffic"
+    description: "Monitor rejected connections"
+    tags: [security]
+    config:
+      verb: count
+      log_group: /aws/vpc/flow-logs
+      since: 1h
+      filter: "action = 'REJECT'"
+      by: srcaddr,dstport
+      limit: 10
+```
+
+## Extension Points
+
+FLI is designed with several extension points:
+
+1. **New Query Verbs**: Add new query types by implementing the verb pattern
+2. **Custom Formatters**: Add new output formats by implementing the formatter interface
+3. **Additional Annotations**: Extend the cache with new annotation types
+4. **Schema Versions**: Support new VPC Flow Log versions by updating the schema
+
+## AWS Integration
+
+FLI integrates with AWS services through the AWS SDK:
+
+- **CloudWatch Logs**: Executes Logs Insights queries
+- **EC2**: Retrieves ENI metadata for annotations
+- **Credentials**: Uses standard AWS credential chain
+- **Region**: Respects AWS_REGION environment variable
+
+## Performance Considerations
+
+1. **Query Optimization**:
+   - Time window restrictions to limit data scanned
+   - Field selection to reduce data transfer
+   - Aggregations performed in CloudWatch rather than client-side
+
+2. **Caching Strategy**:
+   - Persistent cache for ENI and IP annotations
+   - Cache refresh commands for updating metadata
+   - Automatic enrichment of query results
+
+3. **Backoff Strategy**:
+   - Initial poll interval of 500ms
+   - Exponential backoff up to configurable maximum
+   - Long-running query notifications
