@@ -7,15 +7,17 @@
 [![Release](https://img.shields.io/github/v/release/fractalops/fli)](https://github.com/fractalops/fli/releases)
 [![Contributors](https://img.shields.io/github/contributors/fractalops/fli)](https://github.com/fractalops/fli/graphs/contributors)
 
-FLI is a command-line tool for querying and analyzing AWS VPC Flow Logs stored in CloudWatch Logs built in Go
+FLI is a powerful command-line tool that simplifies AWS VPC Flow Logs analysis with intuitive commands, smart filtering, and 
+automatic annotations, turning raw network data into actionable insights in seconds.
 
 ## Features
 
-- **Query AWS VPC Flow Logs** with natural language filters
-- **Aggregate data** with count, sum, and group-by operations
-- **Multiple output formats**: Table, CSV, and JSON
-- **IP and ENI annotations**: WHOIS lookup, cloud provider IP detection, ENI tagging
-- **Cross-platform**: Linux, macOS, and Windows binaries
+- **Intuitive Query Language**: Simple commands like `count`, `sum`, and `raw` replace complex query syntax
+- **Smart Filtering**: Filter traffic by IP, port, protocol, or any flow log field with a natural language-like syntax
+- **Powerful Aggregations**: Easily identify top talkers, analyze traffic patterns, and detect anomalies
+- **Rich Annotations**: Automatically enrich IPs with WHOIS data and identify cloud provider ranges
+- **Multiple Output Formats**: View results as tables, CSV, or JSON for further processing
+- **Cross-Platform**: Works on Linux, macOS, and Windows
 
 ## Quick Start
 
@@ -42,26 +44,105 @@ sudo make install
    export FLI_LOG_GROUP="/aws/vpc/flow-logs"
    ```
 
-### Basic Usage
+## Real-World Examples
+
+### Security Analysis
 
 ```bash
-# Count all flows in the last 5 minutes
-fli count --since 5m
+# Find rejected traffic to sensitive ports
+fli count --by srcaddr --filter "action=REJECT and (dstport=22 or dstport=3389)" --since 1d
+```
 
-# Show top 10 source IPs by traffic volume
-fli sum bytes --by srcaddr --limit 10 --since 1h
+Sample output:
+```
++---------------+-------+
+| srcaddr       | flows |
++---------------+-------+
+| 203.0.113.15  | 1,245 |
+| 198.51.100.72 |   982 |
+| 192.0.2.101   |   657 |
++---------------+-------+
+```
 
-# View raw flow logs with specific fields
-fli raw srcaddr,dstaddr,dstport,action -s 30m
+### Traffic Monitoring
 
-# Filter for specific traffic
-fli raw -f "dstport=443 and action=ACCEPT" -s 1h
+```bash
+# Identify top bandwidth consumers
+fli sum bytes --by srcaddr,dstaddr --limit 10 --since 6h
+```
 
-# Use different output format
-fli count --by srcaddr -o json -s 1h
+Sample output:
+```
++---------------+---------------+------------+
+| srcaddr       | dstaddr       | sum_bytes  |
++---------------+---------------+------------+
+| 10.0.1.5      | 10.0.2.10     | 1,245,678  |
+| 10.0.3.12     | 10.0.1.200    |   982,345  |
+| 10.0.2.8      | 10.0.3.15     |   657,890  |
++---------------+---------------+------------+
+```
 
-# Set version and timeout
-fli raw -v 5 -t 30s -s 15m
+### Network Troubleshooting
+
+```bash
+# Check connectivity between specific hosts
+fli raw srcaddr,dstaddr,dstport,action --filter "srcaddr=10.0.1.5 and dstaddr=10.0.2.10" --since 2h
+```
+
+Sample output:
+```
++------------+------------+---------+--------+
+| srcaddr    | dstaddr    | dstport | action |
++------------+------------+---------+--------+
+| 10.0.1.5   | 10.0.2.10  | 443     | ACCEPT |
+| 10.0.1.5   | 10.0.2.10  | 80      | ACCEPT |
+| 10.0.1.5   | 10.0.2.10  | 22      | REJECT |
++------------+------------+---------+--------+
+```
+
+## Powerful Features
+
+### IP and ENI Annotations
+
+```bash
+# Automatically annotate ENIs and IPs
+fli raw interface_id,srcaddr,dstaddr --since 1h
+```
+
+Sample output:
+```
++----------------------------------+---------------+----------------------------------+
+| interface_id                     | srcaddr       | dstaddr                          |
++----------------------------------+---------------+----------------------------------+
+| eni-01234567 [api-server-sg]     | 10.0.1.5      | 203.0.113.10 [ACME Corp (US)]    |
+| eni-89abcdef [worker-node-sg]    | 172.16.0.10   | 54.239.28.85 [Amazon AWS (US)]   |
+| eni-12345abc [db-sg]             | 192.168.1.100 | 8.8.8.8 [Google LLC (US)]        |
++----------------------------------+---------------+----------------------------------+
+```
+
+### Cloud Provider Detection
+
+```bash
+# Identify traffic to/from major cloud providers
+fli count --by dstaddr --filter "pkt_dst_aws_service = 'S3'" --since 1d --version 5
+```
+
+Sample output:
+```
++----------------------------------+-------+
+| dstaddr                          | flows |
++----------------------------------+-------+
+| 54.239.28.85 [S3]                | 1,245 |
+| 52.94.133.131 [S3]               |   982 |
+| 52.94.8.16 [S3]                  |   657 |
++----------------------------------+-------+
+```
+
+### Advanced Filtering
+
+```bash
+# Complex filtering with multiple conditions
+fli raw --filter "(srcaddr=10.0.0.0/8 and dstport=443) or (protocol=UDP and bytes>1000)" --since 3h
 ```
 
 ## Common Commands
@@ -115,6 +196,36 @@ fli cache clean
 --format, -o       # Output format: table, csv, json (default: table)
 --version, -v      # Flow logs version: 2 or 5 (default: 2)
 --timeout, -t      # Query timeout (e.g., 30s, 5m, 1h)
+```
+
+## Output Formats
+
+### Table Format (Default)
+```
++---------------+-------+
+| srcaddr       | flows |
++---------------+-------+
+| 10.0.1.5      | 1,245 |
+| 172.16.0.10   |   982 |
+| 192.168.1.100 |   657 |
++---------------+-------+
+```
+
+### CSV Format
+```csv
+srcaddr,flows
+10.0.1.5,1245
+172.16.0.10,982
+192.168.1.100,657
+```
+
+### JSON Format
+```json
+[
+  {"srcaddr": "10.0.1.5", "flows": 1245},
+  {"srcaddr": "172.16.0.10", "flows": 982},
+  {"srcaddr": "192.168.1.100", "flows": 657}
+]
 ```
 
 ## Autocompletion
@@ -183,19 +294,6 @@ fli raw -f "dstport >= 80 and dstport <= 443"
 fli count --by dstport --filter "protocol=TCP"
 ```
 
-## Output Formats
-
-```bash
-# Table format (default)
-fli count --by srcaddr -o table
-
-# CSV format
-fli sum bytes --by srcaddr -o csv
-
-# JSON format
-fli raw --filter "action=REJECT" --format json
-```
-
 ## Requirements
 
 - **Go**: 1.20+ (for building from source)
@@ -205,23 +303,16 @@ fli raw --filter "action=REJECT" --format json
 
 ## AWS Permissions
 
-Your IAM user/role needs the following permissions:
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "logs:StartQuery",
-                "logs:GetQueryResults",
-                "logs:DescribeLogGroups"
-            ],
-            "Resource": "*"
-        }
-    ]
-}
-```
+FLI requires the following AWS permissions:
+
+- **CloudWatch Logs** permissions to query flow logs
+  - `logs:StartQuery`
+  - `logs:GetQueryResults`
+  - `logs:StopQuery`
+  
+- **EC2 permissions** to retrieve ENI metadata and tags (used by the cache refresh command)
+  - `ec2:DescribeNetworkInterfaces`
+  - `ec2:DescribeTags`
 
 ## Documentation
 
