@@ -95,7 +95,7 @@ func (f *CommandFlags) AddCommonFlags(cmd *cobra.Command) {
 func (f *CommandFlags) AddQueryFlags(cmd *cobra.Command) {
 	cmd.Flags().IntVar(&f.Limit, "limit", f.Limit, "Maximum number of results to return")
 	cmd.Flags().StringVarP(&f.Format, "format", "o", f.Format, "Output format (table, csv, json)")
-	cmd.Flags().DurationVarP(&f.Since, "since", "s", f.Since, "Time window to look back (e.g., 5m, 1h, 7d)")
+	cmd.Flags().DurationVarP(&f.Since, "since", "s", f.Since, "Time window to look back (e.g., 5m, 1h, 30s)")
 	cmd.Flags().StringVarP(&f.Filter, "filter", "f", f.Filter, "Filter expression (e.g., 'srcaddr=10.0.0.1 and dstport=443')")
 	cmd.Flags().StringVar(&f.By, "by", f.By, "Group by field(s), comma-separated if multiple")
 	cmd.Flags().BoolVar(&f.SaveENIs, "save-enis", false, "Save ENIs found in results to the cache")

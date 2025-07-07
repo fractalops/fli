@@ -113,9 +113,6 @@ func AddCommands() {
 	// Add cache commands
 	initCacheCommands()
 
-	// Add execute command
-	initExecuteCommand()
-
 	// Add completion command
 	rootCmd.AddCommand(completionCmd)
 

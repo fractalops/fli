@@ -109,7 +109,7 @@ func TestNewBuilder(t *testing.T) {
 				WithVerb(VerbRaw),
 			},
 			expected: `parse @message "* * * * * * * * * * * * * *" as version, account_id, interface_id, srcaddr, dstaddr, srcport, dstport, protocol, packets, bytes, start, end, action, log_status
-| fields srcaddr, dstaddr
+| display srcaddr, dstaddr
 | limit 100`,
 		},
 		{
@@ -208,7 +208,7 @@ func TestNewBuilder(t *testing.T) {
 				WithFields("duration"),
 			},
 			expected: `parse @message "* * * * * * * * * * * * * *" as version, account_id, interface_id, srcaddr, dstaddr, srcport, dstport, protocol, packets, bytes, start, end, action, log_status
-| fields end - start as duration
+| display end - start as duration
 | limit 100`,
 		},
 		{

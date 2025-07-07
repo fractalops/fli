@@ -111,9 +111,10 @@ func (b Builder) String() string {
 		parts = append(parts, sortClause)
 	} else if len(b.fields) > 0 && b.fields[0] != "*" {
 		// This is a raw verb with specific fields (not "*")
-		fieldsClause := b.buildFieldsClause()
-		if fieldsClause != "" {
-			parts = append(parts, fieldsClause)
+		// Use display clause instead of fields clause to avoid conflicts
+		displayClause := b.buildDisplayClause()
+		if displayClause != "" {
+			parts = append(parts, displayClause)
 		}
 	}
 
@@ -190,9 +191,9 @@ func (b *Builder) buildGroupByExpressions() string {
 	return strings.Join(groupByExpressions, ", ")
 }
 
-// buildFieldsClause constructs the 'fields' clause for the raw verb.
+// buildDisplayClause constructs the 'display' clause for the raw verb.
 // It handles computed fields by using their expressions.
-func (b *Builder) buildFieldsClause() string {
+func (b *Builder) buildDisplayClause() string {
 	if len(b.fields) == 0 {
 		return ""
 	}
@@ -210,5 +211,5 @@ func (b *Builder) buildFieldsClause() string {
 		}
 	}
 
-	return "fields " + strings.Join(fieldExpressions, ", ")
+	return "display " + strings.Join(fieldExpressions, ", ")
 }

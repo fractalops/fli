@@ -93,32 +93,51 @@ func (e *QueryExecutor) ExecuteQuery(ctx context.Context, _ *cobra.Command, opts
 
 // handleDryRunFromQuery extracts verb and fields from a query string and handles dry run output.
 func handleDryRunFromQuery(query string, _ []querybuilder.Option, cmdFlags *CommandFlags) error {
-	verbStr, fields := extractVerbAndFieldsFromQuery(query)
-
-	// Create args array for handleDryRun
-	args := []string{verbStr}
-	if len(fields) > 0 {
-		args = append(args, strings.Join(fields, ","))
+	// Output YAML configuration with the actual query
+	if _, err := fmt.Println("# FLI Query Configuration"); err != nil {
+		return fmt.Errorf("failed to write dry run output: %w", err)
+	}
+	if _, err := fmt.Println("# Save this to a file or pipe to 'fli execute -f -'"); err != nil {
+		return fmt.Errorf("failed to write dry run output: %w", err)
 	}
 
-	// Use the handleDryRun function to output YAML
-	return handleDryRun(nil, args, cmdFlags)
+	// Use a simple YAML-like output without external dependencies
+	output := fmt.Sprintf(`verb: %s
+log_group: %s
+since: %s
+limit: %d
+version: %d
+format: %s
+query_timeout: %s
+no_ptr: %t
+proto_names: %t
+use_color: %t`,
+		extractVerbFromQuery(query), cmdFlags.LogGroup, cmdFlags.Since, cmdFlags.Limit,
+		cmdFlags.Version, cmdFlags.Format, cmdFlags.QueryTimeout,
+		cmdFlags.NoPtr, cmdFlags.ProtoNames, cmdFlags.UseColor)
+
+	if cmdFlags.Filter != "" {
+		output += fmt.Sprintf("\nfilter: %s", cmdFlags.Filter)
+	}
+	if cmdFlags.By != "" {
+		output += fmt.Sprintf("\nby: %s", cmdFlags.By)
+	}
+	output += fmt.Sprintf("\nquery: %s", query)
+
+	if _, err := fmt.Println(output); err != nil {
+		return fmt.Errorf("failed to write dry run output: %w", err)
+	}
+	return nil
 }
 
-// extractVerbAndFieldsFromQuery parses a query string to extract the verb and fields.
-func extractVerbAndFieldsFromQuery(query string) (string, []string) {
-	var fields []string
-
-	// Parse the verb from the query
+// extractVerbFromQuery extracts just the verb from a query string.
+func extractVerbFromQuery(query string) string {
 	if strings.Contains(query, "stats") {
 		// This is an aggregation query
-		verbStr := extractAggregationVerb(query)
-		fields = extractAggregationFields(query, verbStr)
-		return verbStr, fields
+		return extractAggregationVerb(query)
 	}
-
 	// This is a raw query
-	return "raw", extractRawFields(query)
+	return "raw"
 }
 
 // extractAggregationVerb determines the aggregation verb from a query string.
@@ -135,54 +154,6 @@ func extractAggregationVerb(query string) string {
 		return "max"
 	}
 	return ""
-}
-
-// extractAggregationFields extracts fields from an aggregation query.
-func extractAggregationFields(query, verbStr string) []string {
-	var fields []string
-
-	// Extract fields from the query
-	if verbStr != "count" || !strings.Contains(query, "count(*)") {
-		fieldStart := strings.Index(query, verbStr+"(") + len(verbStr) + 1
-		fieldEnd := strings.Index(query[fieldStart:], ")") + fieldStart
-		if fieldStart > 0 && fieldEnd > fieldStart {
-			field := query[fieldStart:fieldEnd]
-			if field != "*" {
-				fields = append(fields, field)
-			}
-		}
-	}
-
-	return fields
-}
-
-// extractRawFields extracts fields from a raw query.
-func extractRawFields(query string) []string {
-	var fields []string
-
-	// Extract fields from the query
-	// For raw queries, fields are listed after "fields"
-	if strings.Contains(query, "fields ") {
-		fieldStart := strings.Index(query, "fields ") + 7
-		fieldEnd := strings.Index(query[fieldStart:], " |")
-		if fieldEnd < 0 {
-			fieldEnd = len(query[fieldStart:])
-		}
-		fieldEnd += fieldStart
-
-		if fieldStart > 0 && fieldEnd > fieldStart {
-			fieldStr := query[fieldStart:fieldEnd]
-			fieldList := strings.Split(fieldStr, ", ")
-			for _, f := range fieldList {
-				f = strings.TrimSpace(f)
-				if f != "" {
-					fields = append(fields, f)
-				}
-			}
-		}
-	}
-
-	return fields
 }
 
 // runVerb executes a query based on the verb and flags.

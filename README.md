@@ -50,7 +50,7 @@ sudo make install
 
 ```bash
 # Find rejected traffic to sensitive ports
-fli count --by srcaddr --filter "action=REJECT and (dstport=22 or dstport=3389)" --since 1d
+fli count --by srcaddr --filter "action=REJECT and (dstport=22 or dstport=3389)" --since 1h
 ```
 
 Sample output:
@@ -124,7 +124,7 @@ Sample output:
 
 ```bash
 # Identify traffic to/from major cloud providers
-fli count --by dstaddr --filter "pkt_dst_aws_service = 'S3'" --since 1d --version 5
+fli count --by dstaddr --filter "pkt_dst_aws_service = 'S3'" --since 1h --version 5
 ```
 
 Sample output:
@@ -189,7 +189,7 @@ fli cache clean
 
 ```bash
 --log-group, -l    # CloudWatch Logs group to query
---since, -s        # Relative time range (e.g., 30m, 2h, 7d)
+--since, -s        # Relative time range (e.g., 30m, 2h, 1h)
 --filter, -f       # Filter expression
 --by               # Group by fields (comma-separated)
 --limit            # Limit number of results (default: 20)

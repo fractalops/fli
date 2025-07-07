@@ -78,7 +78,7 @@ func Example_basic() {
 	}
 	fmt.Println(b.String())
 	// Output:
-	// parse @message "* * * * * * * * * * * * * *" as version, account_id, interface_id, srcaddr, dstaddr, srcport, dstport, protocol, packets, bytes, start, end, action, log_status | fields srcaddr, dstaddr, action | limit 5
+	// parse @message "* * * * * * * * * * * * * *" as version, account_id, interface_id, srcaddr, dstaddr, srcport, dstport, protocol, packets, bytes, start, end, action, log_status | display srcaddr, dstaddr, action | limit 5
 }
 
 func Example_complex() {

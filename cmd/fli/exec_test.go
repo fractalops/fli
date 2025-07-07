@@ -261,7 +261,7 @@ func TestBuildCommandOptions(t *testing.T) {
 			args:       []string{"raw", "srcaddr,dstaddr,action"},
 			setupFlags: resetFlags,
 			expectedQuery: "parse @message 'mock_pattern'" +
-				" | fields srcaddr, dstaddr, action" +
+				" | display srcaddr, dstaddr, action" +
 				" | limit 100",
 			expectErr: false,
 		},
@@ -274,7 +274,7 @@ func TestBuildCommandOptions(t *testing.T) {
 			},
 			expectedQuery: "parse @message 'mock_pattern'" +
 				" | filter action = 'ACCEPT'" +
-				" | fields srcaddr, dstaddr" +
+				" | display srcaddr, dstaddr" +
 				" | limit 100",
 			expectErr: false,
 		},
