@@ -23,6 +23,11 @@ automatic annotations, turning raw network data into actionable insights in seco
 
 ### Installation
 
+**Using curl**
+```bash
+curl -sSL https://github.com/fractalops/fli/releases/latest/download/install.sh | bash
+```
+
 **From Source**
 ```bash
 git clone https://github.com/fractalops/fli.git

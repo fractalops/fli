@@ -20,7 +20,7 @@ builds:
       - -s -w -X main.version={{.Version}}
 
 archives:
-  - format: tar.gz
+  - formats: [ 'zip' ]
     name_template: >-
       {{ .ProjectName }}_
       {{- title .Os }}_
@@ -28,4 +28,4 @@ archives:
       {{- else }}{{ .Arch }}{{ end }}
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [ 'zip' ]
