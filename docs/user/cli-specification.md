@@ -35,10 +35,7 @@ option         = "by" , field-name
                | "--save-enis"
                | "--save-ips"
                | "--timeout" , duration
-               | "--collection"
-               | "--name" , string
-               | "--description" , string
-               | "--tags" , string
+
                ;
 
 filter-expr    = <builder's mini-DSL, e.g. srcport=443 and action="REJECT">
@@ -161,14 +158,7 @@ Resolves to
 | `--eni` | []string | - | ENI IDs to refresh (for refresh command) |
 | `--all` | bool | false | Refresh all ENIs (for refresh command) |
 
-### Metadata Flags
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--collection` | bool | false | Output as a query collection |
-| `--name` | string | - | Name for the query |
-| `--description` | string | - | Description for the query |
-| `--tags` | string | - | Comma-separated tags for the query |
 
 ---
 

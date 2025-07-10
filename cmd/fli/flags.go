@@ -27,12 +27,6 @@ type CommandFlags struct {
 	SaveENIs bool          // Save ENIs found in results to the cache
 	SaveIPs  bool          // Save public IPs found in results to the cache
 
-	// Metadata flags
-	Collection       bool   // Output as a query collection
-	QueryName        string // Name for the query
-	QueryDescription string // Description for the query
-	QueryTags        string // Comma-separated tags for the query
-
 	// AWS-specific flags
 	LogGroup     string
 	Version      int
@@ -44,25 +38,21 @@ func NewCommandFlags() *CommandFlags {
 	timeouts := config.DefaultTimeouts()
 
 	flags := &CommandFlags{
-		DryRun:           false,
-		Debug:            false,
-		UseColor:         true,
-		NoPtr:            true,
-		ProtoNames:       true,
-		Limit:            20,
-		Format:           "table",
-		Since:            timeouts.DefaultSince,
-		Filter:           "",
-		By:               "",
-		SaveENIs:         false,
-		SaveIPs:          false,
-		LogGroup:         "",
-		Version:          2,
-		QueryTimeout:     timeouts.Query,
-		Collection:       false,
-		QueryName:        "",
-		QueryDescription: "",
-		QueryTags:        "",
+		DryRun:       false,
+		Debug:        false,
+		UseColor:     true,
+		NoPtr:        true,
+		ProtoNames:   true,
+		Limit:        20,
+		Format:       "table",
+		Since:        timeouts.DefaultSince,
+		Filter:       "",
+		By:           "",
+		SaveENIs:     false,
+		SaveIPs:      false,
+		LogGroup:     "",
+		Version:      2,
+		QueryTimeout: timeouts.Query,
 	}
 
 	// Load default log group from environment variable
@@ -101,10 +91,4 @@ func (f *CommandFlags) AddQueryFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&f.SaveENIs, "save-enis", false, "Save ENIs found in results to the cache")
 	cmd.Flags().BoolVar(&f.SaveIPs, "save-ips", false, "Save public IPs found in results to the cache")
 	cmd.Flags().DurationVarP(&f.QueryTimeout, "timeout", "t", f.QueryTimeout, "Query timeout (e.g., 30s, 5m, 1h)")
-
-	// Metadata flags
-	cmd.Flags().BoolVar(&f.Collection, "collection", false, "Output as a query collection")
-	cmd.Flags().StringVar(&f.QueryName, "name", "", "Name for the query")
-	cmd.Flags().StringVar(&f.QueryDescription, "description", "", "Description for the query")
-	cmd.Flags().StringVar(&f.QueryTags, "tags", "", "Comma-separated tags for the query")
 }

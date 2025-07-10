@@ -12,7 +12,6 @@ graph TD
     A --> C[Query Runner]
     A --> D[Formatter]
     A --> E[Cache System]
-    A --> J[YAML Config]
     C --> G[AWS CloudWatch]
     E --> H[AWS EC2]
     B --> C
@@ -27,7 +26,7 @@ The CLI layer provides a user-friendly interface for interacting with VPC Flow L
 
 - **Command Structure**: Hierarchical command structure using verbs (raw, count, sum, avg, min, max)
 - **Flag System**: Consistent flag handling across commands
-- **Configuration**: Support for environment variables and YAML configurations
+- **Configuration**: Support for environment variables
 
 #### Key Interfaces
 
@@ -48,14 +47,14 @@ type CommandFlags struct {
     DryRun     bool
     Debug      bool
     UseColor   bool
-    
+
     // Query-specific flags
     Limit    int
     Format   string
     Since    time.Duration
     Filter   string
     By       string
-    
+
     // AWS-specific flags
     LogGroup     string
     Version      int
@@ -232,44 +231,43 @@ type IPTag struct {
 
 ### 6. Configuration System
 
-The configuration system supports YAML-based query definitions:
+The configuration system supports environment-based configuration:
 
-- **Single Queries**: Define individual queries with parameters
-- **Query Collections**: Group related queries together
-- **Metadata**: Add names, descriptions, and tags to queries
+- **Environment Variables**: Set default values via environment variables
+- **Command Line Flags**: Override defaults with command line flags
+- **Dry Run Output**: Generate YAML configuration for reuse
 
 #### Key Interfaces
 
 ```go
-// Execute a query configuration
-func executeQueryConfig(cmd *cobra.Command, config QueryConfig) error
+// Execute a query with options
+func executeQuery(ctx context.Context, cmd *cobra.Command, opts []querybuilder.Option, flags *CommandFlags) ([][]interface{}, runner.QueryStatistics, error)
 
-// Execute a query collection
-func executeQueryCollection(cmd *cobra.Command, collection QueryCollection) error
+// Handle dry run output
+func handleDryRunFromQuery(query string, opts []querybuilder.Option, cmdFlags *CommandFlags) error
 ```
 
 #### Key Data Structures
 
 ```go
-// QueryConfig represents a single query configuration
-type QueryConfig struct {
-    Verb         string
-    Fields       []string
-    LogGroup     string
-    Since        time.Duration
-    Filter       string
-    By           string
-    Limit        int
-    Version      int
-    Format       string
-    Name         string
-    Description  string
-    Tags         []string
-}
+// CommandFlags holds all the flags for the CLI commands
+type CommandFlags struct {
+    // Common flags
+    DryRun     bool
+    Debug      bool
+    UseColor   bool
 
-// QueryCollection represents a collection of queries
-type QueryCollection struct {
-    Queries []EnhancedQueryConfig
+    // Query-specific flags
+    Limit    int
+    Format   string
+    Since    time.Duration
+    Filter   string
+    By       string
+
+    // AWS-specific flags
+    LogGroup     string
+    Version      int
+    QueryTimeout time.Duration
 }
 ```
 
