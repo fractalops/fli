@@ -10,6 +10,8 @@
 FLI is a powerful command-line tool that simplifies AWS VPC Flow Logs analysis with intuitive commands, smart filtering, and 
 automatic annotations, turning raw network data into actionable insights in seconds.
 
+![Demo](fli-demo.gif)
+
 ## Features
 
 - **Intuitive Query Language**: Simple commands like `count`, `sum`, and `raw` replace complex query syntax
