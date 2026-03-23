@@ -29,6 +29,9 @@ linters:
     generated: lax
     presets:
       - common-false-positives
+    rules:
+      - linters: [wrapcheck]
+        path: "cmd/fli/(init_wizard|init_create|init_confirm|cmd_cleanup|cmd_init)\\.go"
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0

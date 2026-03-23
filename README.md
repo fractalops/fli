@@ -14,6 +14,9 @@ automatic annotations, turning raw network data into actionable insights in seco
 
 ## Features
 
+- **Interactive Setup**: `fli init` discovers or creates VPC flow logs with an interactive wizard — no manual AWS console work
+- **Profile Management**: Named profiles for multiple environments (dev/staging/prod) with automatic version detection
+- **Full Lifecycle**: `fli cleanup` tears down all resources created by `fli init` with state tracking
 - **Intuitive Query Language**: Simple commands like `count`, `sum`, and `raw` replace complex query syntax
 - **Smart Filtering**: Filter traffic by IP, port, protocol, or any flow log field with a natural language-like syntax
 - **Powerful Aggregations**: Easily identify top talkers, analyze traffic patterns, and detect anomalies
@@ -38,16 +41,25 @@ make build
 sudo make install
 ```
 
-### Configuration
+### Setup
 
 1. **Set up AWS credentials**:
    ```bash
    aws configure
    ```
 
-2. **Configure environment variables** (optional):
+2. **Initialize fli** (interactive wizard — discovers or creates VPC flow logs):
    ```bash
-   # Set default log group
+   fli init
+   ```
+   This will:
+   - Discover existing VPC flow logs in your region
+   - Let you select one, or create a new flow log with all required AWS resources (IAM role, log group)
+   - Save the configuration as a named profile
+
+3. **Or configure manually** (optional):
+   ```bash
+   # Set default log group directly
    export FLI_LOG_GROUP="/aws/vpc/flow-logs"
    ```
 
@@ -176,6 +188,57 @@ fli min <field> [flags]
 fli max <field> [flags]
 ```
 
+### Setup Commands
+
+```bash
+# Interactive setup — discover or create VPC flow logs
+fli init
+
+# Create with a named profile
+fli init --profile staging
+
+# Check required IAM permissions before setup
+fli init --check-permissions
+
+# Use plain prompts instead of TUI (for CI or screen readers)
+fli init --no-tui
+```
+
+### Cleanup Commands
+
+```bash
+# Delete AWS resources created by fli init
+fli cleanup
+
+# Clean up a specific profile
+fli cleanup --profile staging
+
+# Keep the log group (preserve historical data)
+fli cleanup --keep-logs
+
+# Skip confirmation prompt
+fli cleanup --force
+
+# Clean up all profiles
+fli cleanup --all
+```
+
+### Profile Commands
+
+```bash
+# List all profiles
+fli profile list
+
+# Set the active profile
+fli profile use staging
+
+# Show profile details and managed resources
+fli profile show staging
+
+# Remove a profile from config (does not delete AWS resources)
+fli profile delete staging
+```
+
 ### Cache Commands
 
 ```bash
@@ -195,15 +258,18 @@ fli cache clean
 ## Common Flags
 
 ```bash
---log-group, -l    # CloudWatch Logs group to query
+--profile          # Named profile to use (see "fli profile list")
+--log-group, -l    # CloudWatch Logs group to query (overrides profile)
 --since, -s        # Relative time range (e.g., 30m, 2h, 1h)
 --filter, -f       # Filter expression
 --by               # Group by fields (comma-separated)
 --limit            # Limit number of results (default: 20)
 --format, -o       # Output format: table, csv, json (default: table)
---version, -v      # Flow logs version: 2 or 5 (default: 2)
+--version, -v      # Flow logs version: 2 or 5 (default: 2, auto-set by profile)
 --timeout, -t      # Query timeout (e.g., 30s, 5m, 1h)
 ```
+
+Log group resolution order: `--log-group` flag > `--profile` flag > `FLI_LOG_GROUP` env > active profile > `default` profile.
 
 ## Output Formats
 
@@ -303,29 +369,40 @@ fli count --by dstport --filter "protocol=TCP"
 
 ## Requirements
 
-- **Go**: 1.20+ (for building from source)
+- **Go**: 1.22+ (for building from source)
 - **AWS**: Account with VPC Flow Logs enabled
 - **Permissions**: CloudWatch Logs read access
 - **Platform**: Linux, macOS, or Windows
 
 ## AWS Permissions
 
-FLI requires the following AWS permissions:
+### Querying (all users)
 
-- **CloudWatch Logs** permissions to query flow logs
-  - `logs:StartQuery`
-  - `logs:GetQueryResults`
-  - `logs:StopQuery`
-  
-- **EC2 permissions** to retrieve ENI metadata and tags (used by the cache refresh command)
-  - `ec2:DescribeNetworkInterfaces`
-  - `ec2:DescribeTags`
+- `logs:StartQuery`, `logs:GetQueryResults`, `logs:StopQuery` — query flow logs
+- `ec2:DescribeNetworkInterfaces`, `ec2:DescribeTags` — ENI metadata for cache
+
+### `fli init` (setup)
+
+- `ec2:DescribeFlowLogs` — discover existing flow logs
+- `ec2:DescribeVpcs`, `ec2:DescribeSubnets` — resource selection
+- `ec2:CreateFlowLogs`, `ec2:CreateTags` — create flow log
+- `iam:CreateRole`, `iam:PutRolePolicy`, `iam:PassRole` — create IAM role for log publishing
+- `logs:PutRetentionPolicy`, `logs:DescribeLogGroups` — configure log group
+- `sts:GetCallerIdentity` — verify credentials
+
+### `fli cleanup` (teardown)
+
+- `ec2:DeleteFlowLogs` — delete flow log
+- `iam:DeleteRolePolicy`, `iam:DeleteRole` — delete IAM role
+- `logs:DeleteLogGroup` — delete log group
 
 ## Documentation
 
 - [CLI Specification](docs/user/cli-specification.md)
 - [Annotations System](docs/user/annotations.md)
-- [Design Documents](docs/design/architecture.md)
+- [Architecture](docs/design/architecture.md)
+- [Init/Cleanup/Profile Spec](docs/design/init-cleanup-spec.md)
+- [UI Refresh Spec](docs/design/ui-refresh-spec.md)
 
 ## License
 
@@ -337,3 +414,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Cobra](https://github.com/spf13/cobra) for the CLI framework
 - [BBolt](https://github.com/etcd-io/bbolt) for embedded caching
 - [WHOIS](https://github.com/likexian/whois) for IP address annotation
+- [Huh](https://github.com/charmbracelet/huh) for interactive terminal forms
+- [Lip Gloss](https://github.com/charmbracelet/lipgloss) for terminal styling

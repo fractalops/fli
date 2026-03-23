@@ -64,9 +64,24 @@ Examples:
 			flags.LogGroup = envLogGroup
 		}
 
+		// Track if --version was explicitly passed before profile resolution
+		if cmd.Flags().Changed("version") {
+			flags.versionExplicitlySet = true
+		}
+
+		// Profile-based resolution (only when log group not already set)
+		if flags.LogGroup == "" {
+			resolveProfileFlags()
+		}
+
 		// Only validate format and version for query commands. We identify query
 		// commands by checking for a "query" annotation.
 		if cmd.Annotations["query"] == "true" {
+			// Ensure log group is available for query commands
+			if flags.LogGroup == "" {
+				return fmt.Errorf("log group is required. Set it with --log-group, --profile, FLI_LOG_GROUP env, or run \"fli init\"")
+			}
+
 			if format := cmd.Flag("format").Value.String(); !validFormats[format] {
 				return fmt.Errorf("invalid format %q: must be one of: table, csv, json", format)
 			}
@@ -79,6 +94,33 @@ Examples:
 	},
 }
 
+// resolveProfileFlags loads the profile config and sets flags.LogGroup and flags.Version
+// from the resolved profile. This is called when --log-group and FLI_LOG_GROUP are not set.
+func resolveProfileFlags() {
+	cfgPath, err := config.ConfigPath()
+	if err != nil {
+		return
+	}
+
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		return
+	}
+
+	profileName := cfg.ResolveProfile(flags.Profile)
+	profile, ok := cfg.GetProfile(profileName)
+	if !ok {
+		return
+	}
+
+	flags.LogGroup = profile.LogGroup
+
+	// Only override version if it wasn't explicitly set on the command line
+	if !flags.versionExplicitlySet {
+		flags.Version = profile.Version
+	}
+}
+
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
@@ -87,13 +129,6 @@ func Execute() {
 
 	// Add all commands to the root command
 	AddCommands()
-
-	// If log group is required but not provided, check environment variable
-	if flags.LogGroup == "" {
-		if err := rootCmd.MarkPersistentFlagRequired("log-group"); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to mark log-group flag as required: %v\n", err)
-		}
-	}
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -112,6 +147,16 @@ func AddCommands() {
 
 	// Add cache commands
 	initCacheCommands()
+
+	// Add init, cleanup, and profile commands
+	initInitCommand()
+	rootCmd.AddCommand(initCmd)
+
+	initCleanupCommand()
+	rootCmd.AddCommand(cleanupCmd)
+
+	initProfileCommands()
+	rootCmd.AddCommand(profileCmd)
 
 	// Add completion command
 	rootCmd.AddCommand(completionCmd)

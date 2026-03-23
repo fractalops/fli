@@ -18,6 +18,9 @@ type CommandFlags struct {
 	NoPtr      bool
 	ProtoNames bool
 
+	// Profile flag
+	Profile string
+
 	// Query-specific flags
 	Limit    int
 	Format   string
@@ -31,6 +34,9 @@ type CommandFlags struct {
 	LogGroup     string
 	Version      int
 	QueryTimeout time.Duration
+
+	// Internal tracking
+	versionExplicitlySet bool
 }
 
 // NewCommandFlags creates a new CommandFlags instance with default values.
@@ -79,6 +85,7 @@ func (f *CommandFlags) AddCommonFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(&f.NoPtr, "no-ptr", f.NoPtr, "Remove @ptr fields from output")
 	cmd.PersistentFlags().BoolVar(&f.ProtoNames, "proto-names", f.ProtoNames, "Use protocol names instead of numbers")
 	cmd.PersistentFlags().BoolVar(&f.Debug, "debug", f.Debug, "Enable debug output")
+	cmd.PersistentFlags().StringVar(&f.Profile, "profile", "", "Named profile to use (see \"fli profile list\")")
 }
 
 // AddQueryFlags adds common query flags to a command.
