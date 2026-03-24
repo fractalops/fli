@@ -15,7 +15,7 @@ automatic annotations, turning raw network data into actionable insights in seco
 ## Features
 
 - **Interactive Setup**: `fli init` discovers or creates VPC flow logs with an interactive wizard — no manual AWS console work
-- **Profile Management**: Named profiles for multiple environments (dev/staging/prod) with automatic version detection
+- **Profile Management**: Named profiles for multiple flow log configurations with automatic version detection
 - **Full Lifecycle**: `fli cleanup` tears down all resources created by `fli init` with state tracking
 - **Intuitive Query Language**: Simple commands like `count`, `sum`, and `raw` replace complex query syntax
 - **Smart Filtering**: Filter traffic by IP, port, protocol, or any flow log field with a natural language-like syntax
@@ -195,7 +195,7 @@ fli max <field> [flags]
 fli init
 
 # Create with a named profile
-fli init --profile staging
+fli init --profile security
 
 # Check required IAM permissions before setup
 fli init --check-permissions
@@ -211,7 +211,7 @@ fli init --no-tui
 fli cleanup
 
 # Clean up a specific profile
-fli cleanup --profile staging
+fli cleanup --profile security
 
 # Keep the log group (preserve historical data)
 fli cleanup --keep-logs
@@ -230,13 +230,13 @@ fli cleanup --all
 fli profile list
 
 # Set the active profile
-fli profile use staging
+fli profile use security
 
 # Show profile details and managed resources
-fli profile show staging
+fli profile show security
 
 # Remove a profile from config (does not delete AWS resources)
-fli profile delete staging
+fli profile delete security
 ```
 
 ### Cache Commands

@@ -135,13 +135,17 @@ func runProfileShow(_ *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		name = args[0]
 	}
+
 	if name == "" {
-		name = "default"
+		if len(cfg.Profiles) == 0 {
+			return fmt.Errorf("no profiles configured. Run \"fli init\" to create one")
+		}
+		return fmt.Errorf("no active profile set. Run \"fli profile use <name>\" or specify one: fli profile show <name>")
 	}
 
 	profile, ok := cfg.GetProfile(name)
 	if !ok {
-		return fmt.Errorf("profile %q not found", name)
+		return fmt.Errorf("profile %q not found. Run \"fli profile list\" to see available profiles", name)
 	}
 
 	activeStr := "—"
