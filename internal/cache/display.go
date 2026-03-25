@@ -24,7 +24,7 @@ func (c *Cache) List(ctx context.Context) (string, error) {
 			// Log or handle error, but continue for now
 			continue
 		}
-		buf.WriteString(fmt.Sprintf("  %s%s\n", eni, formatENITag(tag)))
+		fmt.Fprintf(&buf, "  %s%s\n", eni, formatENITag(tag))
 	}
 	buf.WriteString("\n")
 
@@ -45,7 +45,7 @@ func (c *Cache) List(ctx context.Context) (string, error) {
 			// Log or handle error, but continue for now
 			continue
 		}
-		buf.WriteString(fmt.Sprintf("  %s %s\n", ip, formatIPAnnotation(annotation)))
+		fmt.Fprintf(&buf, "  %s %s\n", ip, formatIPAnnotation(annotation))
 	}
 	buf.WriteString("\n")
 
@@ -58,7 +58,7 @@ func (c *Cache) List(ctx context.Context) (string, error) {
 	for _, prefix := range prefixes {
 		prefixAddr, err := netip.ParsePrefix(prefix)
 		if err != nil {
-			buf.WriteString(fmt.Sprintf("  %s (invalid prefix)\n", prefix))
+			fmt.Fprintf(&buf, "  %s (invalid prefix)\n", prefix)
 			continue
 		}
 		// Use the first IP in the prefix for lookup.
@@ -67,7 +67,7 @@ func (c *Cache) List(ctx context.Context) (string, error) {
 			// Log or handle error, but continue for now
 			continue
 		}
-		buf.WriteString(fmt.Sprintf("  %s %s\n", prefix, formatIPAnnotation(annotation)))
+		fmt.Fprintf(&buf, "  %s %s\n", prefix, formatIPAnnotation(annotation))
 	}
 
 	return buf.String(), nil

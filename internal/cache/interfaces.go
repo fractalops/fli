@@ -72,7 +72,7 @@ func (c *defaultHTTPClient) Get(ctx context.Context, url string) (*http.Response
 }
 
 func (c *defaultHTTPClient) Do(req *http.Request) (*http.Response, error) {
-	resp, err := c.client.Do(req)
+	resp, err := c.client.Do(req) //nolint:gosec // URL is constructed internally, not from user input
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute HTTP request: %w", err)
 	}

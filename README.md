@@ -14,8 +14,9 @@ automatic annotations, turning raw network data into actionable insights in seco
 
 ## Features
 
-- **Interactive Setup**: `fli init` discovers or creates VPC flow logs with an interactive wizard — no manual AWS console work
-- **Profile Management**: Named profiles for multiple flow log configurations with automatic version detection
+- **Interactive Setup**: `fli init` discovers or creates VPC flow logs interactively
+- **Profile Management**: Named profiles for multiple flow log configurations with 
+- Automatic schema version detection
 - **Full Lifecycle**: `fli cleanup` tears down all resources created by `fli init` with state tracking
 - **Intuitive Query Language**: Simple commands like `count`, `sum`, and `raw` replace complex query syntax
 - **Smart Filtering**: Filter traffic by IP, port, protocol, or any flow log field with a natural language-like syntax
@@ -63,7 +64,7 @@ sudo make install
    export FLI_LOG_GROUP="/aws/vpc/flow-logs"
    ```
 
-## Real-World Examples
+## Examples
 
 ### Security Analysis
 
@@ -119,7 +120,7 @@ Sample output:
 +------------+------------+---------+--------+
 ```
 
-## Powerful Features
+## More Features
 
 ### IP and ENI Annotations
 

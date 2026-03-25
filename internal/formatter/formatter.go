@@ -109,17 +109,17 @@ func generateDebugOutput(rawResults, processedResults [][]runner.Field) string {
 
 	sb.WriteString("\n=== DEBUG: Raw Query Results ===\n")
 	for i, row := range rawResults {
-		sb.WriteString(fmt.Sprintf("Row %d:\n", i))
+		fmt.Fprintf(&sb, "Row %d:\n", i)
 		for _, field := range row {
-			sb.WriteString(fmt.Sprintf("  %s = '%s'\n", field.Name, field.Value))
+			fmt.Fprintf(&sb, "  %s = '%s'\n", field.Name, field.Value)
 		}
 	}
 
 	sb.WriteString("\n=== DEBUG: Processed Results ===\n")
 	for i, row := range processedResults {
-		sb.WriteString(fmt.Sprintf("Row %d:\n", i))
+		fmt.Fprintf(&sb, "Row %d:\n", i)
 		for _, field := range row {
-			sb.WriteString(fmt.Sprintf("  %s = '%s'\n", field.Name, field.Value))
+			fmt.Fprintf(&sb, "  %s = '%s'\n", field.Name, field.Value)
 		}
 	}
 
