@@ -1,6 +1,8 @@
 module fli
 
-go 1.25.8
+go 1.24.2
+
+toolchain go1.25.8
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.41.4
