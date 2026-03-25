@@ -17,6 +17,7 @@ import (
 )
 
 const (
+	checkMark          = "✓"
 	emDash             = "—"
 	defaultProfileName = "default"
 
@@ -168,168 +169,15 @@ func runCreateWizard(ctx context.Context, ec2Client fliaws.FlowLogsAPI, flowLogs
 
 	// Build the single form with all groups — back-navigation works across all of them
 	form := huh.NewForm(
-		// Group 1: Profile name + resource scope
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Profile name").
-				Value(&cfg.ProfileName).
-				Validate(validateProfileName),
-			huh.NewSelect[string]().
-				Title("What would you like to monitor?").
-				Options(
-					huh.NewOption("Entire VPC (covers all ENIs automatically)", resourceTypeVPC),
-					huh.NewOption("Specific subnet", resourceTypeSubnet),
-					huh.NewOption("Specific network interface", resourceTypeNetworkInterface),
-				).
-				Value(&cfg.ResourceType),
-		),
-
-		// Group 2a: VPC select (only for VPC scope, skip if single VPC)
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Select a VPC").
-				Options(vpcOptions...).
-				Value(&cfg.ResourceID),
-		).WithHideFunc(func() bool {
-			return cfg.ResourceType != resourceTypeVPC || singleVPC
-		}),
-
-		// Group 2b: VPC filter for subnets (skip VPC picker if single VPC)
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Select a VPC to filter subnets").
-				Options(vpcOptions...).
-				Value(&filterVpcID),
-		).WithHideFunc(func() bool {
-			return cfg.ResourceType != resourceTypeSubnet || singleVPC
-		}),
-
-		// Group 2b-2: Subnet select (options loaded dynamically based on filterVpcID)
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Select a subnet").
-				OptionsFunc(func() []huh.Option[string] {
-					vpcID := filterVpcID
-					if vpcID == "" {
-						return nil
-					}
-					return optionCache.getSubnetOptions(vpcID)
-				}, &filterVpcID).
-				Value(&cfg.ResourceID),
-		).WithHideFunc(func() bool {
-			return cfg.ResourceType != resourceTypeSubnet
-		}),
-
-		// Group 2c: VPC filter for ENIs (skip VPC picker if single VPC)
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Select a VPC to filter interfaces").
-				Options(vpcOptions...).
-				Value(&filterVpcID),
-		).WithHideFunc(func() bool {
-			return cfg.ResourceType != resourceTypeNetworkInterface || singleVPC
-		}),
-
-		// Group 2c-2: ENI select (options loaded dynamically based on filterVpcID)
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Select a network interface").
-				OptionsFunc(func() []huh.Option[string] {
-					vpcID := filterVpcID
-					if vpcID == "" {
-						return nil
-					}
-					return optionCache.getENIOptions(vpcID)
-				}, &filterVpcID).
-				Value(&cfg.ResourceID),
-		).WithHideFunc(func() bool {
-			return cfg.ResourceType != resourceTypeNetworkInterface
-		}),
-
-		// Group 3: Traffic + field set + interval
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Which traffic to capture?").
-				Options(
-					huh.NewOption("All traffic", "ALL"),
-					huh.NewOption("Accepted only", "ACCEPT"),
-					huh.NewOption("Rejected only", "REJECT"),
-				).
-				Value(&cfg.TrafficType),
-			huh.NewSelect[string]().
-				Title("Which field set?").
-				Description("Determines which VPC Flow Log fields are captured").
-				Options(
-					huh.NewOption("Default (v2) — 14 fields: basic 5-tuple + bytes/packets/action", flowlog.PresetDefault),
-					huh.NewOption("Security (v5) — adds tcp-flags, pkt-src/dst, flow-direction, aws-service", flowlog.PresetSecurity),
-					huh.NewOption("Troubleshooting (v4) — adds vpc-id, subnet-id, instance-id, region, az-id", flowlog.PresetTroubleshooting),
-					huh.NewOption("Full (v5) — all 29 fields (highest ingestion cost)", flowlog.PresetFull),
-					huh.NewOption("Custom — pick individual fields", flowlog.PresetCustom),
-				).
-				Value(&cfg.FieldSet),
-			huh.NewSelect[string]().
-				Title("Aggregation interval").
-				Options(
-					huh.NewOption("1 minute (more granular, ~6x more records)", "60"),
-					huh.NewOption("10 minutes (lower cost)", "600"),
-				).
-				Value(&cfg.AggInterval),
-		),
-
-		// Group 3b: Custom field picker (only when custom is selected)
-		huh.NewGroup(
-			huh.NewMultiSelect[string]().
-				Title("Select fields").
-				Description("Fields are grouped by version. Higher versions include more metadata.").
-				Options(buildFieldOptions()...).
-				Value(&cfg.CustomFields),
-		).WithHideFunc(func() bool {
-			return cfg.FieldSet != flowlog.PresetCustom
-		}),
-
-		// Group 4: Retention + log group name
-		huh.NewGroup(
-			huh.NewSelect[int]().
-				Title("Log group retention").
-				Options(
-					huh.NewOption("7 days", 7),
-					huh.NewOption("14 days", 14),
-					huh.NewOption("30 days (default)", 30),
-					huh.NewOption("90 days", 90),
-					huh.NewOption("1 year", 365),
-					huh.NewOption("Never expire", 0),
-				).
-				Value(&cfg.RetentionDays),
-			huh.NewInput().
-				Title("Log group name").
-				// Default is set dynamically based on resource ID
-				Value(&cfg.LogGroupName).
-				Validate(func(s string) error {
-					// Auto-fill default if empty (first time reaching this group)
-					if cfg.LogGroupName == "" && cfg.ResourceID != "" {
-						cfg.LogGroupName = fliaws.FlowLogLogGroupName(cfg.ResourceID)
-					}
-					if s == "" {
-						return fmt.Errorf("log group name cannot be empty")
-					}
-					if !strings.HasPrefix(s, "/") {
-						return fmt.Errorf("log group name must start with /")
-					}
-					return nil
-				}).
-				PlaceholderFunc(func() string {
-					if cfg.ResourceID != "" {
-						return fliaws.FlowLogLogGroupName(cfg.ResourceID)
-					}
-					return "/fli/flow-logs/<resource-id>"
-				}, &cfg.ResourceID),
-		).WithHideFunc(func() bool {
-			// Set log group name default when this group becomes visible
-			if cfg.LogGroupName == "" && cfg.ResourceID != "" {
-				cfg.LogGroupName = fliaws.FlowLogLogGroupName(cfg.ResourceID)
-			}
-			return false // always visible
-		}),
+		buildProfileAndScopeGroup(cfg),
+		buildVPCSelectGroup(cfg, vpcOptions, singleVPC),
+		buildSubnetFilterGroup(cfg, vpcOptions, &filterVpcID, singleVPC),
+		buildSubnetSelectGroup(cfg, &filterVpcID, optionCache),
+		buildENIFilterGroup(cfg, vpcOptions, &filterVpcID, singleVPC),
+		buildENISelectGroup(cfg, &filterVpcID, optionCache),
+		buildTrafficAndFieldsGroup(cfg),
+		buildCustomFieldsGroup(cfg),
+		buildRetentionGroup(cfg),
 	).WithAccessible(noTUI)
 
 	if err := form.Run(); err != nil {
@@ -346,6 +194,173 @@ func runCreateWizard(ctx context.Context, ec2Client fliaws.FlowLogsAPI, flowLogs
 	cfg.Version = flowlog.PresetVersion(cfg.FieldSet)
 
 	return cfg, nil
+}
+
+func buildProfileAndScopeGroup(cfg *InitConfig) *huh.Group {
+	return huh.NewGroup(
+		huh.NewInput().
+			Title("Profile name").
+			Value(&cfg.ProfileName).
+			Validate(validateProfileName),
+		huh.NewSelect[string]().
+			Title("What would you like to monitor?").
+			Options(
+				huh.NewOption("Entire VPC (covers all ENIs automatically)", resourceTypeVPC),
+				huh.NewOption("Specific subnet", resourceTypeSubnet),
+				huh.NewOption("Specific network interface", resourceTypeNetworkInterface),
+			).
+			Value(&cfg.ResourceType),
+	)
+}
+
+func buildVPCSelectGroup(cfg *InitConfig, vpcOptions []huh.Option[string], singleVPC bool) *huh.Group {
+	return huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Select a VPC").
+			Options(vpcOptions...).
+			Value(&cfg.ResourceID),
+	).WithHideFunc(func() bool {
+		return cfg.ResourceType != resourceTypeVPC || singleVPC
+	})
+}
+
+func buildSubnetFilterGroup(cfg *InitConfig, vpcOptions []huh.Option[string], filterVpcID *string, singleVPC bool) *huh.Group {
+	return huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Select a VPC to filter subnets").
+			Options(vpcOptions...).
+			Value(filterVpcID),
+	).WithHideFunc(func() bool {
+		return cfg.ResourceType != resourceTypeSubnet || singleVPC
+	})
+}
+
+func buildSubnetSelectGroup(cfg *InitConfig, filterVpcID *string, optionCache *resourceOptionCache) *huh.Group {
+	return huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Select a subnet").
+			OptionsFunc(func() []huh.Option[string] {
+				if *filterVpcID == "" {
+					return nil
+				}
+				return optionCache.getSubnetOptions(*filterVpcID)
+			}, filterVpcID).
+			Value(&cfg.ResourceID),
+	).WithHideFunc(func() bool {
+		return cfg.ResourceType != resourceTypeSubnet
+	})
+}
+
+func buildENIFilterGroup(cfg *InitConfig, vpcOptions []huh.Option[string], filterVpcID *string, singleVPC bool) *huh.Group {
+	return huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Select a VPC to filter interfaces").
+			Options(vpcOptions...).
+			Value(filterVpcID),
+	).WithHideFunc(func() bool {
+		return cfg.ResourceType != resourceTypeNetworkInterface || singleVPC
+	})
+}
+
+func buildENISelectGroup(cfg *InitConfig, filterVpcID *string, optionCache *resourceOptionCache) *huh.Group {
+	return huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Select a network interface").
+			OptionsFunc(func() []huh.Option[string] {
+				if *filterVpcID == "" {
+					return nil
+				}
+				return optionCache.getENIOptions(*filterVpcID)
+			}, filterVpcID).
+			Value(&cfg.ResourceID),
+	).WithHideFunc(func() bool {
+		return cfg.ResourceType != resourceTypeNetworkInterface
+	})
+}
+
+func buildTrafficAndFieldsGroup(cfg *InitConfig) *huh.Group {
+	return huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Which traffic to capture?").
+			Options(
+				huh.NewOption("All traffic", "ALL"),
+				huh.NewOption("Accepted only", "ACCEPT"),
+				huh.NewOption("Rejected only", "REJECT"),
+			).
+			Value(&cfg.TrafficType),
+		huh.NewSelect[string]().
+			Title("Which field set?").
+			Description("Determines which VPC Flow Log fields are captured").
+			Options(
+				huh.NewOption("Default (v2) — 14 fields: basic 5-tuple + bytes/packets/action", flowlog.PresetDefault),
+				huh.NewOption("Security (v5) — adds tcp-flags, pkt-src/dst, flow-direction, aws-service", flowlog.PresetSecurity),
+				huh.NewOption("Troubleshooting (v4) — adds vpc-id, subnet-id, instance-id, region, az-id", flowlog.PresetTroubleshooting),
+				huh.NewOption("Full (v5) — all 29 fields (highest ingestion cost)", flowlog.PresetFull),
+				huh.NewOption("Custom — pick individual fields", flowlog.PresetCustom),
+			).
+			Value(&cfg.FieldSet),
+		huh.NewSelect[string]().
+			Title("Aggregation interval").
+			Options(
+				huh.NewOption("1 minute (more granular, ~6x more records)", "60"),
+				huh.NewOption("10 minutes (lower cost)", "600"),
+			).
+			Value(&cfg.AggInterval),
+	)
+}
+
+func buildCustomFieldsGroup(cfg *InitConfig) *huh.Group {
+	return huh.NewGroup(
+		huh.NewMultiSelect[string]().
+			Title("Select fields").
+			Description("Fields are grouped by version. Higher versions include more metadata.").
+			Options(buildFieldOptions()...).
+			Value(&cfg.CustomFields),
+	).WithHideFunc(func() bool {
+		return cfg.FieldSet != flowlog.PresetCustom
+	})
+}
+
+func buildRetentionGroup(cfg *InitConfig) *huh.Group {
+	return huh.NewGroup(
+		huh.NewSelect[int]().
+			Title("Log group retention").
+			Options(
+				huh.NewOption("7 days", 7),
+				huh.NewOption("14 days", 14),
+				huh.NewOption("30 days (default)", 30),
+				huh.NewOption("90 days", 90),
+				huh.NewOption("1 year", 365),
+				huh.NewOption("Never expire", 0),
+			).
+			Value(&cfg.RetentionDays),
+		huh.NewInput().
+			Title("Log group name").
+			Value(&cfg.LogGroupName).
+			Validate(func(s string) error {
+				if cfg.LogGroupName == "" && cfg.ResourceID != "" {
+					cfg.LogGroupName = fliaws.FlowLogLogGroupName(cfg.ResourceID)
+				}
+				if s == "" {
+					return fmt.Errorf("log group name cannot be empty")
+				}
+				if !strings.HasPrefix(s, "/") {
+					return fmt.Errorf("log group name must start with /")
+				}
+				return nil
+			}).
+			PlaceholderFunc(func() string {
+				if cfg.ResourceID != "" {
+					return fliaws.FlowLogLogGroupName(cfg.ResourceID)
+				}
+				return "/fli/flow-logs/<resource-id>"
+			}, &cfg.ResourceID),
+	).WithHideFunc(func() bool {
+		if cfg.LogGroupName == "" && cfg.ResourceID != "" {
+			cfg.LogGroupName = fliaws.FlowLogLogGroupName(cfg.ResourceID)
+		}
+		return false
+	})
 }
 
 // resourceOptionCache lazily loads and caches subnet/ENI options by VPC ID.
@@ -497,7 +512,7 @@ func displayDiscoveryTable(flowLogs []fliaws.FlowLogInfo, region string) {
 		}
 		managed := emDash
 		if fl.ManagedByFli {
-			managed = "✓"
+			managed = checkMark
 		}
 		rows = append(rows, []string{
 			fl.ResourceID,

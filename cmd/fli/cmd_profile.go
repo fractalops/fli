@@ -150,7 +150,7 @@ func runProfileShow(_ *cobra.Command, args []string) error {
 
 	activeStr := "—"
 	if name == cfg.ActiveProfile {
-		activeStr = "✓"
+		activeStr = checkMark
 	}
 
 	// Build content

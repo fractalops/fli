@@ -2,14 +2,11 @@ package aws
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
-	"strings"
 
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
-	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 )
 
 // CloudWatchLogsManagementAPI defines the CloudWatch Logs methods needed for log group management.
@@ -64,7 +61,7 @@ func DeleteLogGroup(ctx context.Context, client CloudWatchLogsManagementAPI, nam
 		LogGroupName: awssdk.String(name),
 	})
 	if err != nil {
-		if isLogGroupNotFound(err) {
+		if IsNotFound(err) {
 			return nil
 		}
 		return fmt.Errorf("failed to delete log group: %w", err)
@@ -145,16 +142,4 @@ func getLogGroupARN(ctx context.Context, client CloudWatchLogsManagementAPI, nam
 		}
 	}
 	return "", fmt.Errorf("log group %q not found after creation", name)
-}
-
-func isLogGroupNotFound(err error) bool {
-	if err == nil {
-		return false
-	}
-	var rnfe *types.ResourceNotFoundException
-	if errors.As(err, &rnfe) {
-		return true
-	}
-	// Fallback to string matching for wrapped errors
-	return strings.Contains(err.Error(), "ResourceNotFoundException")
 }

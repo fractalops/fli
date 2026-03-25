@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
@@ -18,6 +17,7 @@ type IAMAPI interface {
 	DeleteRole(context.Context, *iam.DeleteRoleInput, ...func(*iam.Options)) (*iam.DeleteRoleOutput, error)
 	DeleteRolePolicy(context.Context, *iam.DeleteRolePolicyInput, ...func(*iam.Options)) (*iam.DeleteRolePolicyOutput, error)
 	GetRole(context.Context, *iam.GetRoleInput, ...func(*iam.Options)) (*iam.GetRoleOutput, error)
+	SimulatePrincipalPolicy(context.Context, *iam.SimulatePrincipalPolicyInput, ...func(*iam.Options)) (*iam.SimulatePrincipalPolicyOutput, error)
 }
 
 const (
@@ -118,7 +118,7 @@ func DeleteFlowLogRole(ctx context.Context, client IAMAPI, roleName, policyName 
 		RoleName:   aws.String(roleName),
 		PolicyName: aws.String(policyName),
 	})
-	if err != nil && !isIAMNotFound(err) {
+	if err != nil && !IsNotFound(err) {
 		return fmt.Errorf("failed to delete role policy: %w", err)
 	}
 
@@ -126,7 +126,7 @@ func DeleteFlowLogRole(ctx context.Context, client IAMAPI, roleName, policyName 
 	_, err = client.DeleteRole(ctx, &iam.DeleteRoleInput{
 		RoleName: aws.String(roleName),
 	})
-	if err != nil && !isIAMNotFound(err) {
+	if err != nil && !IsNotFound(err) {
 		return fmt.Errorf("failed to delete IAM role: %w", err)
 	}
 
@@ -139,7 +139,7 @@ func RoleExists(ctx context.Context, client IAMAPI, roleName string) (bool, erro
 		RoleName: aws.String(roleName),
 	})
 	if err != nil {
-		if isIAMNotFound(err) {
+		if IsNotFound(err) {
 			return false, nil
 		}
 		return false, fmt.Errorf("failed to get IAM role: %w", err)
@@ -150,8 +150,4 @@ func RoleExists(ctx context.Context, client IAMAPI, roleName string) (bool, erro
 // FlowLogRoleName generates the IAM role name for a given resource ID.
 func FlowLogRoleName(resourceID string) string {
 	return fmt.Sprintf("fli-flow-logs-%s", resourceID)
-}
-
-func isIAMNotFound(err error) bool {
-	return strings.Contains(err.Error(), "NoSuchEntity")
 }

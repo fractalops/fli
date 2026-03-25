@@ -325,8 +325,41 @@ func saveExistingProfile(initCfg *InitConfig, region string) error {
 	return nil
 }
 
-func runPermissionCheck(_ context.Context, _ *ec2.Client, _ *iam.Client, _ *cloudwatchlogs.Client, _ fliaws.CallerIdentity) error {
-	// TODO: Implement SimulatePrincipalPolicy-based permission check
-	fmt.Fprintln(os.Stderr, "Permission check not yet implemented. AWS credentials are valid.")
+func runPermissionCheck(ctx context.Context, _ *ec2.Client, iamClient *iam.Client, _ *cloudwatchlogs.Client, identity fliaws.CallerIdentity) error {
+	allActions := make([]string, 0, len(fliaws.InitActions)+len(fliaws.CleanupActions)+len(fliaws.QueryActions))
+	allActions = append(allActions, fliaws.InitActions...)
+	allActions = append(allActions, fliaws.CleanupActions...)
+	allActions = append(allActions, fliaws.QueryActions...)
+
+	var results []fliaws.PermissionResult
+	var checkErr error
+	err := spinner.New().
+		Title("Checking IAM permissions...").
+		Action(func() {
+			results, checkErr = fliaws.CheckPermissions(ctx, iamClient, identity.ARN, allActions)
+		}).
+		Run()
+	if err != nil {
+		return handleAbort(err)
+	}
+	if checkErr != nil {
+		return fmt.Errorf("permission check failed: %w\n\nNote: SimulatePrincipalPolicy requires iam:SimulatePrincipalPolicy permission", checkErr)
+	}
+
+	var denied []string
+	for _, r := range results {
+		status := checkMark
+		if !r.Allowed {
+			status = "✗"
+			denied = append(denied, r.Action)
+		}
+		fmt.Fprintf(os.Stderr, "  %s %s\n", status, r.Action)
+	}
+
+	if len(denied) > 0 {
+		return fmt.Errorf("%d permission(s) denied. Grant these actions to your IAM principal to use fli", len(denied))
+	}
+
+	fmt.Fprintln(os.Stderr, "\n✓ All required permissions are available.")
 	return nil
 }

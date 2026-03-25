@@ -197,7 +197,7 @@ func cleanupSingleProfile(ctx context.Context, cfg *config.Config, state *config
 
 func deleteFlowLogResource(ctx context.Context, ec2Client *ec2.Client, r config.Resource) error {
 	if err := fliaws.DeleteFlowLog(ctx, ec2Client, r.ID); err != nil {
-		if isNotFoundError(err) {
+		if fliaws.IsNotFound(err) {
 			fmt.Fprintf(os.Stderr, "⚠ Warning: VPC flow log %s not found (may have been manually deleted)\n", r.ID)
 			return nil
 		}
@@ -209,7 +209,7 @@ func deleteFlowLogResource(ctx context.Context, ec2Client *ec2.Client, r config.
 
 func deleteIAMRoleResource(ctx context.Context, iamClient *iam.Client, r config.Resource) error {
 	if err := fliaws.DeleteFlowLogRole(ctx, iamClient, r.Name, fliaws.FlowLogPolicyName); err != nil {
-		if isNotFoundError(err) {
+		if fliaws.IsNotFound(err) {
 			fmt.Fprintf(os.Stderr, "⚠ Warning: IAM role %s not found (may have been manually deleted)\n", r.Name)
 			return nil
 		}
@@ -225,7 +225,7 @@ func deleteLogGroupResource(ctx context.Context, cwlClient *cloudwatchlogs.Clien
 		return nil
 	}
 	if err := fliaws.DeleteLogGroup(ctx, cwlClient, r.Name); err != nil {
-		if isNotFoundError(err) {
+		if fliaws.IsNotFound(err) {
 			fmt.Fprintf(os.Stderr, "⚠ Warning: Log group %s not found (may have been manually deleted)\n", r.Name)
 			return nil
 		}
@@ -261,15 +261,4 @@ func showCleanupPanel(ps *config.ProfileState, profileName string) {
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196")).Render(fmt.Sprintf("Cleanup: %s", profileName))
 	fmt.Fprintf(os.Stderr, "\n%s\n%s\n\n", title, panel)
-}
-
-func isNotFoundError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "NotFound") ||
-		strings.Contains(msg, "NoSuchEntity") ||
-		strings.Contains(msg, "ResourceNotFoundException") ||
-		strings.Contains(msg, "not found")
 }

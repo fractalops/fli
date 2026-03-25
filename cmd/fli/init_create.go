@@ -17,6 +17,8 @@ import (
 	"fli/internal/flowlog"
 )
 
+const iamPropagationDelay = 10 * time.Second
+
 func createResources(ctx context.Context, ec2Client fliaws.FlowLogsAPI, iamClient fliaws.IAMAPI, cwlClient fliaws.CloudWatchLogsManagementAPI, initCfg *InitConfig, region, accountID string) error {
 	initCfg.Region = region
 
@@ -65,7 +67,7 @@ func createResources(ctx context.Context, ec2Client fliaws.FlowLogsAPI, iamClien
 	// Step 2: Wait for IAM propagation
 	err = spinner.New().
 		Title("Waiting for IAM propagation...").
-		Action(func() { time.Sleep(10 * time.Second) }).
+		Action(func() { time.Sleep(iamPropagationDelay) }).
 		Run()
 	if err != nil {
 		return err
