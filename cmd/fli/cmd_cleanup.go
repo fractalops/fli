@@ -201,7 +201,7 @@ func deleteFlowLogResource(ctx context.Context, ec2Client *ec2.Client, r config.
 			fmt.Fprintf(os.Stderr, "⚠ Warning: VPC flow log %s not found (may have been manually deleted)\n", r.ID)
 			return nil
 		}
-		return fmt.Errorf("failed to delete flow log: %w", err)
+		return fliaws.WrapError(err, "delete flow log")
 	}
 	fmt.Fprintf(os.Stderr, "✓ Deleted flow log %s\n", r.ID)
 	return nil
@@ -213,7 +213,7 @@ func deleteIAMRoleResource(ctx context.Context, iamClient *iam.Client, r config.
 			fmt.Fprintf(os.Stderr, "⚠ Warning: IAM role %s not found (may have been manually deleted)\n", r.Name)
 			return nil
 		}
-		return fmt.Errorf("failed to delete IAM role: %w", err)
+		return fliaws.WrapError(err, "delete IAM role")
 	}
 	fmt.Fprintf(os.Stderr, "✓ Deleted IAM role %s\n", r.Name)
 	return nil
@@ -229,7 +229,7 @@ func deleteLogGroupResource(ctx context.Context, cwlClient *cloudwatchlogs.Clien
 			fmt.Fprintf(os.Stderr, "⚠ Warning: Log group %s not found (may have been manually deleted)\n", r.Name)
 			return nil
 		}
-		return fmt.Errorf("failed to delete log group: %w", err)
+		return fliaws.WrapError(err, "delete log group")
 	}
 	fmt.Fprintf(os.Stderr, "✓ Deleted log group %s\n", r.Name)
 	return nil

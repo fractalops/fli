@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/signal"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
@@ -87,8 +86,7 @@ func isNonInteractive() bool {
 }
 
 func runInit(cmd *cobra.Command, _ []string) error {
-	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
-	defer stop()
+	ctx := cmd.Context()
 
 	region, err := resolveRegion(ctx, initRegion)
 	if err != nil {
@@ -139,7 +137,7 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		return handleAbort(err)
 	}
 	if discoveryErr != nil {
-		return fmt.Errorf("failed to discover flow logs: %w", discoveryErr)
+		return fliaws.WrapError(discoveryErr, "discover flow logs")
 	}
 
 	// Branch: non-interactive or interactive
@@ -158,16 +156,9 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		return saveExistingProfile(initCfg, region)
 	}
 
-	// Confirmation
-	if !initForce {
-		confirmed, err := showConfirmation(initCfg, region, initNoTUI)
-		if err != nil {
-			return handleAbort(err)
-		}
-		if !confirmed {
-			fmt.Fprintln(os.Stderr, "Cancelled.")
-			return nil
-		}
+	// Interactive wizard has a built-in confirm step; non-interactive requires --force
+	if !initCfg.Confirmed && !initForce {
+		return fmt.Errorf("non-interactive mode requires --force to confirm resource creation")
 	}
 
 	// Create resources

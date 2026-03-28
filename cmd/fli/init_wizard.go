@@ -33,6 +33,7 @@ type InitConfig struct {
 	ProfileName string
 	UseExisting bool
 	Region      string
+	Confirmed   bool
 
 	// Existing flow log
 	LogGroupName string
@@ -67,14 +68,14 @@ func runInitWizard(ctx context.Context, ec2Client fliaws.FlowLogsAPI, flowLogs [
 	if len(flowLogs) == 0 {
 		fmt.Fprintln(os.Stderr, "\n● No existing flow logs found in "+region)
 		fmt.Fprintln(os.Stderr, "\n→ Proceeding to create a new flow log...")
-		return runCreateWizard(ctx, ec2Client, flowLogs, cfg, profileFlag, noTUI)
+		return runCreateWizard(ctx, ec2Client, flowLogs, cfg, profileFlag, noTUI, region)
 	}
 
 	// Case B: Flow logs exist but none are CloudWatch
 	if len(cwlFlowLogs) == 0 {
 		fmt.Fprintln(os.Stderr, "\n● No CloudWatch Logs flow logs found (required for fli)")
 		fmt.Fprintln(os.Stderr, "\n→ Proceeding to create a new flow log...")
-		return runCreateWizard(ctx, ec2Client, flowLogs, cfg, profileFlag, noTUI)
+		return runCreateWizard(ctx, ec2Client, flowLogs, cfg, profileFlag, noTUI, region)
 	}
 
 	// Case C: Usable flow logs exist — ask what to do
@@ -97,7 +98,7 @@ func runInitWizard(ctx context.Context, ec2Client fliaws.FlowLogsAPI, flowLogs [
 	if choice == "existing" {
 		return runExistingWizard(cwlFlowLogs, cfg, profileFlag, noTUI)
 	}
-	return runCreateWizard(ctx, ec2Client, flowLogs, cfg, profileFlag, noTUI)
+	return runCreateWizard(ctx, ec2Client, flowLogs, cfg, profileFlag, noTUI, region)
 }
 
 func runExistingWizard(cwlFlowLogs []fliaws.FlowLogInfo, cfg *InitConfig, profileFlag string, noTUI bool) (*InitConfig, error) {
@@ -141,8 +142,9 @@ func runExistingWizard(cwlFlowLogs []fliaws.FlowLogInfo, cfg *InitConfig, profil
 	return cfg, nil
 }
 
-func runCreateWizard(ctx context.Context, ec2Client fliaws.FlowLogsAPI, flowLogs []fliaws.FlowLogInfo, cfg *InitConfig, profileFlag string, noTUI bool) (*InitConfig, error) {
+func runCreateWizard(ctx context.Context, ec2Client fliaws.FlowLogsAPI, flowLogs []fliaws.FlowLogInfo, cfg *InitConfig, profileFlag string, noTUI bool, region string) (*InitConfig, error) {
 	cfg.UseExisting = false
+	cfg.Region = region
 	cfg.ProfileName = defaultProfileName
 	if profileFlag != "" {
 		cfg.ProfileName = profileFlag
@@ -167,7 +169,8 @@ func runCreateWizard(ctx context.Context, ec2Client fliaws.FlowLogsAPI, flowLogs
 		cfg.ResourceID = filterVpcID
 	}
 
-	// Build the single form with all groups — back-navigation works across all of them
+	// Build the single form with all groups — back-navigation works across all of them,
+	// including the final confirmation step.
 	form := huh.NewForm(
 		buildProfileAndScopeGroup(cfg),
 		buildVPCSelectGroup(cfg, vpcOptions, singleVPC),
@@ -178,6 +181,7 @@ func runCreateWizard(ctx context.Context, ec2Client fliaws.FlowLogsAPI, flowLogs
 		buildTrafficAndFieldsGroup(cfg),
 		buildCustomFieldsGroup(cfg),
 		buildRetentionGroup(cfg),
+		buildConfirmGroup(cfg, cfg.Region),
 	).WithAccessible(noTUI)
 
 	if err := form.Run(); err != nil {
@@ -198,6 +202,9 @@ func runCreateWizard(ctx context.Context, ec2Client fliaws.FlowLogsAPI, flowLogs
 
 func buildProfileAndScopeGroup(cfg *InitConfig) *huh.Group {
 	return huh.NewGroup(
+		huh.NewNote().
+			Title("New Flow Log").
+			Description("Configure a new VPC flow log and save it as a named profile."),
 		huh.NewInput().
 			Title("Profile name").
 			Value(&cfg.ProfileName).
@@ -280,6 +287,10 @@ func buildENISelectGroup(cfg *InitConfig, filterVpcID *string, optionCache *reso
 
 func buildTrafficAndFieldsGroup(cfg *InitConfig) *huh.Group {
 	return huh.NewGroup(
+		huh.NewNote().
+			TitleFunc(func() string {
+				return fmt.Sprintf("Configure flow log for %s", cfg.ResourceID)
+			}, &cfg.ResourceID),
 		huh.NewSelect[string]().
 			Title("Which traffic to capture?").
 			Options(
@@ -334,33 +345,75 @@ func buildRetentionGroup(cfg *InitConfig) *huh.Group {
 				huh.NewOption("Never expire", 0),
 			).
 			Value(&cfg.RetentionDays),
-		huh.NewInput().
-			Title("Log group name").
-			Value(&cfg.LogGroupName).
-			Validate(func(s string) error {
-				if cfg.LogGroupName == "" && cfg.ResourceID != "" {
-					cfg.LogGroupName = fliaws.FlowLogLogGroupName(cfg.ResourceID)
-				}
-				if s == "" {
-					return fmt.Errorf("log group name cannot be empty")
-				}
-				if !strings.HasPrefix(s, "/") {
-					return fmt.Errorf("log group name must start with /")
-				}
-				return nil
-			}).
-			PlaceholderFunc(func() string {
-				if cfg.ResourceID != "" {
-					return fliaws.FlowLogLogGroupName(cfg.ResourceID)
-				}
-				return "/fli/flow-logs/<resource-id>"
-			}, &cfg.ResourceID),
 	).WithHideFunc(func() bool {
+		// Auto-set log group name from resource ID
 		if cfg.LogGroupName == "" && cfg.ResourceID != "" {
 			cfg.LogGroupName = fliaws.FlowLogLogGroupName(cfg.ResourceID)
 		}
 		return false
 	})
+}
+
+func buildConfirmGroup(cfg *InitConfig, region string) *huh.Group {
+	return huh.NewGroup(
+		huh.NewNote().
+			Title("Review").
+			DescriptionFunc(func() string {
+				return formatSummary(cfg, region)
+			}, cfg),
+		huh.NewConfirm().
+			Title("Create these resources?").
+			Affirmative("Yes, create").
+			Negative("Go back").
+			Value(&cfg.Confirmed),
+	)
+}
+
+func formatSummary(cfg *InitConfig, region string) string {
+	roleName := fliaws.FlowLogRoleName(cfg.ResourceID)
+
+	fieldSetLabel := cfg.FieldSet
+	switch cfg.FieldSet {
+	case flowlog.PresetDefault:
+		fieldSetLabel = "Default (v2)"
+	case flowlog.PresetSecurity:
+		fieldSetLabel = "Security (v5)"
+	case flowlog.PresetTroubleshooting:
+		fieldSetLabel = "Troubleshooting (v4)"
+	case flowlog.PresetFull:
+		fieldSetLabel = "Full (v5)"
+	case flowlog.PresetCustom:
+		fieldSetLabel = fmt.Sprintf("Custom (%d fields)", len(cfg.CustomFields))
+	}
+
+	intervalLabel := "10 minutes"
+	if cfg.AggInterval == "60" {
+		intervalLabel = "1 minute"
+	}
+
+	var retentionLabel string
+	switch cfg.RetentionDays {
+	case 0:
+		retentionLabel = "never expire"
+	case 365:
+		retentionLabel = "1 year"
+	default:
+		retentionLabel = fmt.Sprintf("%d days", cfg.RetentionDays)
+	}
+
+	return fmt.Sprintf(
+		"Profile              %s\n"+
+			"Region               %s\n"+
+			"Resource             %s\n"+
+			"CloudWatch Log Group %s  (%s retention)\n"+
+			"IAM Role             %s\n"+
+			"Flow Log             %s traffic | %s | %s interval\n\n"+
+			"Tags                 managed-by=fli, fli-profile=%s",
+		cfg.ProfileName, region, cfg.ResourceID,
+		cfg.LogGroupName, retentionLabel, roleName,
+		cfg.TrafficType, fieldSetLabel, intervalLabel,
+		cfg.ProfileName,
+	)
 }
 
 // resourceOptionCache lazily loads and caches subnet/ENI options by VPC ID.

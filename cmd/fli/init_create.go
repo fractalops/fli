@@ -146,8 +146,7 @@ func createIAMRole(ctx context.Context, iamClient fliaws.IAMAPI, state *config.S
 		return "", err
 	}
 	if createErr != nil {
-		fmt.Fprintf(os.Stderr, "✗ Failed to create IAM role: %v\n", createErr)
-		return "", createErr
+		return "", fliaws.WrapError(createErr, "create IAM role")
 	}
 
 	// Save role to state
@@ -226,9 +225,9 @@ func createFlowLog(ctx context.Context, ec2Client fliaws.FlowLogsAPI, state *con
 		return "", err
 	}
 	if createErr != nil {
-		fmt.Fprintf(os.Stderr, "✗ Failed to create flow log: %v\n", createErr)
+		wrapped := fliaws.WrapError(createErr, "create flow log")
 		fmt.Fprintf(os.Stderr, "\nResources already created have been saved. Run \"fli cleanup --profile %s\" to remove them, or re-run \"fli init --profile %s\" to retry.\n", initCfg.ProfileName, initCfg.ProfileName)
-		return "", createErr
+		return "", wrapped
 	}
 
 	// Save to state
